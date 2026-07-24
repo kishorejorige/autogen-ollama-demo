@@ -7,7 +7,7 @@
 | Project Name | AutoGen + Ollama Demo |
 | Version | v0.1.0 |
 | Status | 🚧 In Development |
-| Author | Kishore |
+| Author | Kishore Kumar |
 | Repository | https://github.com/kishorejorige/autogen-ollama-demo |
 | Start Date | 2026-07-24 |
 | Last Updated | 2026-07-24 |

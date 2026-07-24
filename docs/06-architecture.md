@@ -8,7 +8,7 @@
 | Project | AutoGen + Ollama Demo |
 | Version | v0.1.0 |
 | Status | Draft |
-| Author | Kishore |
+| Author | Kishore Kumar |
 | Last Updated | 2026-07-24 |
 
 ---
