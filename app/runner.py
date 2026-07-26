@@ -1,25 +1,31 @@
-from typing import Any, AsyncGenerator
-from autogen_agentchat.conditions import MaxMessageTermination
+from collections.abc import AsyncGenerator
+from typing import Any
+
+from autogen_agentchat.base import TaskResult
 from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
-from autogen_agentchat.base import TaskResult
 from autogen_ext.models.ollama import OllamaChatCompletionClient
 
 from agents.developer import create_python_developer_agent
+from agents.documenter import create_documentation_agent
 from agents.manager import create_manager_agent
+from agents.reviewer import create_code_reviewer_agent
 from config.settings import OLLAMA_BASE_URL, OLLAMA_MODEL
 
 
 def create_team(model_client: OllamaChatCompletionClient) -> RoundRobinGroupChat:
     manager_agent = create_manager_agent(model_client)
     developer_agent = create_python_developer_agent(model_client)
-    termination = MaxMessageTermination(max_messages=3)
+    reviewer_agent = create_code_reviewer_agent(model_client)
+    documenter_agent = create_documentation_agent(model_client)
     return RoundRobinGroupChat(
         participants=[
             manager_agent,
             developer_agent,
+            reviewer_agent,
+            documenter_agent,
         ],
-        termination_condition=termination,
+        max_turns=4,
     )
 
 
@@ -31,7 +37,9 @@ def serialize_message(message: Any) -> dict:
             "type": "TaskResult",
             "content": f"Execution finished. Stop reason: {message.stop_reason or 'None'}",
             "created_at": "",
-            "metadata": {"stop_reason": message.stop_reason} if message.stop_reason else {},
+            "metadata": {"stop_reason": message.stop_reason}
+            if message.stop_reason
+            else {},
         }
 
     content = getattr(message, "content", "")
