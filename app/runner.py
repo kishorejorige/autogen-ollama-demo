@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from autogen_agentchat.base import TaskResult
+from autogen_agentchat.conditions import SourceMatchTermination
 from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
 from autogen_ext.models.ollama import OllamaChatCompletionClient
@@ -25,6 +26,7 @@ def create_team(model_client: OllamaChatCompletionClient) -> RoundRobinGroupChat
             reviewer_agent,
             documenter_agent,
         ],
+        termination_condition=SourceMatchTermination(sources=["documentation_agent"]),
         max_turns=4,
     )
 
