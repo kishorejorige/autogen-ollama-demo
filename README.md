@@ -164,6 +164,26 @@ uv run python main.py "Create a Python function that reverses a string"
 
 ---
 
+## Web Interface Mode
+
+To run the web interface, start both the FastAPI backend and the Angular frontend:
+
+### 1. Start the FastAPI Backend
+```bash
+uv run uvicorn app.api:app --host 0.0.0.0 --port 8000
+```
+
+### 2. Start the Angular Frontend
+Navigate to the `frontend` directory, install dependencies, and start the development server:
+```bash
+cd frontend
+npm install
+npm run start
+```
+Once both servers are running, open your browser and navigate to [http://localhost:4200](http://localhost:4200).
+
+---
+
 # Example Workflow
 
 ```text

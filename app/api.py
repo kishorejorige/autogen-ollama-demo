@@ -20,7 +20,11 @@ app = FastAPI(title="AutoGen API Gateway", version="0.2.0")
 # CORS setup for future Angular frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200"],
+    allow_origins=[
+        "http://localhost:4200",
+        "http://127.0.0.1:4200",
+        "http://172.18.70.101:4200",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
