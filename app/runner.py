@@ -8,7 +8,7 @@ from agents.manager import create_manager_agent
 from config.settings import OLLAMA_BASE_URL, OLLAMA_MODEL
 
 
-async def run() -> None:
+async def run(task: str) -> None:
     model_client = OllamaChatCompletionClient(
         model=OLLAMA_MODEL,
         host=OLLAMA_BASE_URL,
@@ -26,11 +26,6 @@ async def run() -> None:
                 developer_agent,
             ],
             termination_condition=termination,
-        )
-
-        task = (
-            "Create a simple Python function that returns whether "
-            "a number is even or odd."
         )
 
         await Console(team.run_stream(task=task))
