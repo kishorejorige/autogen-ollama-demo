@@ -1,10 +1,11 @@
 import json
 import logging
+from typing import Any
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
 
 from app.runner import run_workflow, run_workflow_stream
 
@@ -41,21 +42,17 @@ class MessageResponse(BaseModel):
     type: str
     content: str
     created_at: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class TaskResponse(BaseModel):
-    messages: List[MessageResponse]
-    stop_reason: Optional[str] = None
+    messages: list[MessageResponse]
+    stop_reason: str | None = None
 
 
 @app.get("/")
 async def root_endpoint():
-    return {
-        "service": "AutoGen API",
-        "version": "0.2.0",
-        "status": "running"
-    }
+    return {"service": "AutoGen API", "version": "0.2.0", "status": "running"}
 
 
 @app.get("/health")
@@ -68,19 +65,15 @@ async def chat_non_streaming(request: TaskRequest):
     task = request.task.strip()
     if not task:
         raise HTTPException(
-            status_code=400,
-            detail="Task cannot be empty or only whitespace"
+            status_code=400, detail="Task cannot be empty or only whitespace"
         )
-    
+
     try:
         result = await run_workflow(task)
         return result
-    except Exception as e:
+    except Exception:
         logger.exception("An error occurred during non-streaming chat execution")
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/api/chat/stream")
@@ -88,15 +81,14 @@ async def chat_streaming(request: TaskRequest):
     task = request.task.strip()
     if not task:
         raise HTTPException(
-            status_code=400,
-            detail="Task cannot be empty or only whitespace"
+            status_code=400, detail="Task cannot be empty or only whitespace"
         )
 
     async def event_generator():
         try:
             async for event in run_workflow_stream(task):
                 yield f"data: {json.dumps(event)}\n\n"
-        except Exception as e:
+        except Exception:
             logger.exception("An error occurred during streaming chat execution")
             error_event = {
                 "id": "error",
@@ -104,7 +96,7 @@ async def chat_streaming(request: TaskRequest):
                 "type": "Error",
                 "content": "Internal server error",
                 "created_at": "",
-                "metadata": {}
+                "metadata": {},
             }
             yield f"data: {json.dumps(error_event)}\n\n"
 
