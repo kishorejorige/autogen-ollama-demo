@@ -1,0 +1,27 @@
+# Git
+.git
+.gitignore
+
+# Python virtual environment and dependencies
+.venv
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing and caching
+.pytest_cache/
+.ruff_cache/
+tests/
+
+# Frontend
+frontend/
+
+# Local data and logs
+data/
+logs/
+.env
+.env.local
+
+# IDE settings
+.vscode/
+.idea/
