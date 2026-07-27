@@ -9,7 +9,7 @@ import { MessageResponse } from '../../models/chat.models';
   template: `
     <div class="cards-list">
       <div *ngFor="let msg of messages; let idx = index" class="message-card" [ngClass]="getAgentClass(msg.source)">
-        
+
         <!-- Card Header -->
         <div class="card-header">
           <div class="agent-info">
@@ -19,20 +19,24 @@ import { MessageResponse } from '../../models/chat.models';
               <span class="message-type" *ngIf="msg.type && msg.type !== 'TextMessage'">{{ msg.type }}</span>
             </div>
           </div>
-          
+
           <div class="header-badges">
             <!-- Review status badge -->
             <span *ngIf="getReviewStatus(msg.content) as status" class="status-badge" [ngClass]="status">
               {{ status === 'APPROVED' ? '✅ APPROVED' : '⚠️ CHANGES REQUIRED' }}
             </span>
-            
+
+            <!-- Test status badge -->
+            <span *ngIf="getTestStatus(msg.content) as status" class="status-badge" [ngClass]="status">
+              {{ status === 'PASS' ? '✅ PASS' : '⚠️ FAIL' }}
+            </span>
+
             <span class="timestamp" *ngIf="msg.created_at">{{ formatTimestamp(msg.created_at) }}</span>
           </div>
         </div>
 
         <!-- Card Body -->
         <div class="card-body">
-          <!-- Render markdown-like code block custom formatting or wrap -->
           <div [ngClass]="{'code-block': msg.source === 'python_developer', 'pre-wrap': true}">
             {{ getCleanContent(msg.content) }}
           </div>
@@ -126,6 +130,16 @@ import { MessageResponse } from '../../models/chat.models';
       color: #991b1b;
       border: 1px solid #fca5a5;
     }
+    .status-badge.PASS {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+    }
+    .status-badge.FAIL {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+    }
     .timestamp {
       font-size: 0.75rem;
       color: #94a3b8;
@@ -151,7 +165,7 @@ import { MessageResponse } from '../../models/chat.models';
       max-height: 400px;
       overflow-y: auto;
     }
-    
+
     /* Agent specific highlights */
     .manager {
       border-left: 4px solid #3b82f6;
@@ -173,6 +187,13 @@ import { MessageResponse } from '../../models/chat.models';
     .reviewer .agent-avatar {
       background: #fef2f2;
       border-color: #fca5a5;
+    }
+    .tester {
+      border-left: 4px solid #f59e0b;
+    }
+    .tester .agent-avatar {
+      background: #fffbeb;
+      border-color: #fde68a;
     }
     .documenter {
       border-left: 4px solid #8b5cf6;
@@ -207,6 +228,7 @@ export class ResponseCards {
       case 'manager_agent': return 'manager';
       case 'python_developer': return 'developer';
       case 'code_reviewer': return 'reviewer';
+      case 'tester_agent': return 'tester';
       case 'documentation_agent': return 'documenter';
       case 'system': return 'system';
       default: return '';
@@ -218,6 +240,7 @@ export class ResponseCards {
       case 'manager_agent': return '📋';
       case 'python_developer': return '💻';
       case 'code_reviewer': return '🔍';
+      case 'tester_agent': return '🧪';
       case 'documentation_agent': return '📝';
       case 'system': return '⚙️';
       case 'user': return '👤';
@@ -229,6 +252,13 @@ export class ResponseCards {
     if (!content) return null;
     if (content.includes('Review status: APPROVED')) return 'APPROVED';
     if (content.includes('Review status: CHANGES_REQUIRED')) return 'CHANGES_REQUIRED';
+    return null;
+  }
+
+  getTestStatus(content: string): 'PASS' | 'FAIL' | null {
+    if (!content) return null;
+    if (content.includes('Test status: PASS')) return 'PASS';
+    if (content.includes('Test status: FAIL')) return 'FAIL';
     return null;
   }
 
