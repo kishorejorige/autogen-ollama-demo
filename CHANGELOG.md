@@ -6,6 +6,17 @@ The format is inspired by **Keep a Changelog**, and this project follows **Seman
 
 ---
 
+## [0.7.0] - Unreleased
+
+### Added
+
+- **Tester Agent**: Dedicated Senior QA agent inspecting code reviewer feedback and generated code, returning QA summaries, edge cases, test suggestions, and strict `PASS` or `FAIL` status.
+- **Bounded Loop Engineering**: Bounded improvement loop sequence (Developer -> Reviewer -> Tester -> Decision) that retries code generation and repair based on reviewer/tester feedback up to 3 times, stopping with `NEEDS_ATTENTION` upon max retries.
+- **Structured State Tracking**: Enriched SSE streaming workflow state tracking, containing workflow IDs, statuses, iteration history, and generated file maps.
+- **Code Tab UI & Copy/Download**: Elegant Angular tabbed UI rendering the response feed and code artifacts panel side-by-side. Support selecting generated files, copy-to-clipboard with animation checkmarks, and browser-initiated file downloads.
+
+---
+
 ## [0.6.0] - Unreleased
 
 ### Added

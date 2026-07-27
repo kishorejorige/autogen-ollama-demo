@@ -13,16 +13,16 @@ This project demonstrates how to build and orchestrate multiple AI agents locall
 # Features
 
 - 🤖 Microsoft AutoGen 0.7.5
-- 👨‍💼 Manager Agent
-- 👨‍💻 Python Developer Agent
-- 🔄 RoundRobinGroupChat Team Workflow
-- 🦙 Ollama Integration
-- ⚡ Dynamic Task Input (CLI & Interactive)
+- 📋 Manager Agent (specialist delegation)
+- 💻 Python Developer Agent (writes code)
+- 🔍 Code Reviewer Agent (provides design & style feedback)
+- 🧪 Tester Agent (identifies defects & suggests test cases)
+- 📝 Documentation Agent (writes manuals and usage guides)
+- 🔄 Bounded Loop Engineering workflow (max 3 retry-repair cycles)
+- 🦙 Ollama Integration (local AI models execution)
 - ⚙️ Environment-based Configuration
-- 📚 Modular Project Structure
-- 📝 Professional Documentation
-- 🌐 Local-First AI Development
-- 🔀 Git Feature Branch Workflow
+- 📦 Tabbed UI Panel (Response Feed & Generated Artifacts side-by-side)
+- 📋 Code Editor Viewer with line numbering, Copy-to-Clipboard & File Downloads
 
 ---
 
@@ -35,33 +35,40 @@ This project demonstrates how to build and orchestrate multiple AI agents locall
 | Modular Architecture | ✅ Complete |
 | Manager Agent | ✅ Complete |
 | Python Developer Agent | ✅ Complete |
-| RoundRobinGroupChat | ✅ Complete |
-| Dynamic Task Input | ✅ Complete |
-| Documentation | ✅ Complete |
-| Automated Tests | 🚧 Planned |
-| GitHub Actions CI | 🚧 Planned |
-| Research Agent | 🚧 Planned |
-| Documentation Agent | 🚧 Planned |
-| Reviewer Agent | 🚧 Planned |
-| Docker Support | 🚧 Planned |
+| Reviewer Agent | ✅ Complete |
+| Tester Agent | ✅ Complete |
+| Documentation Agent | ✅ Complete |
+| Bounded Loop Engineering | ✅ Complete |
+| Code Copy / Download UI | ✅ Complete |
+| Automated Tests | ✅ Complete |
+| GitHub Actions CI | ✅ Complete |
+| Docker Support | ✅ Complete |
 
 ---
 
 # Architecture
 
 ```text
-                    User
-                      │
-                      ▼
-           RoundRobinGroupChat
-                      │
-         ┌────────────┴────────────┐
-         ▼                         ▼
-  Manager Agent          Python Developer Agent
-         │                         │
-         └────────────┬────────────┘
-                      ▼
-                Final Response
+                       User
+                         │
+                         ▼
+                   Manager Agent
+                         │
+                         ▼
+             ┌──► Python Developer ◄──┐
+             │           │            │
+             │           ▼            │
+             │     Code Reviewer      │ (Fail Loop, max 3)
+             │           │            │
+             │           ▼            │
+             │      Tester Agent ─────┘
+             │           │
+             │           ▼ (Pass)
+             │  Documentation Agent
+             │           │
+             └───────────┼────────────
+                         ▼
+                     Solution
 ```
 
 ---
