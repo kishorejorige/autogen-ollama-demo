@@ -55,4 +55,4 @@ export interface TaskResponse {
 
 export interface HealthResponse {
   status: string;
-)
+}
