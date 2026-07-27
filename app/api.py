@@ -21,9 +21,9 @@ app = FastAPI(title="AutoGen API Gateway", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:4200",
-        "http://127.0.0.1:4200",
-        "http://172.18.70.101:4200",
+        "http://localhost:4201",
+        "http://127.0.0.1:4201",
+        "http://172.18.70.101:4201",
     ],
     allow_credentials=True,
     allow_methods=["*"],

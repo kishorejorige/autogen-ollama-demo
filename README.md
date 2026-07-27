@@ -168,13 +168,13 @@ uv run python main.py "Create a Python function that reverses a string"
 
 ---
 
-## Web Interface Mode
+## Web Interface (Native Development Mode)
 
-To run the web interface, start both the FastAPI backend and the Angular frontend:
+To run the web interface natively, start both the FastAPI backend and the Angular frontend:
 
 ### 1. Start the FastAPI Backend
 ```bash
-uv run uvicorn app.api:app --host 0.0.0.0 --port 8000
+uv run uvicorn app.api:app --host 0.0.0.0 --port 8888
 ```
 
 ### 2. Start the Angular Frontend
@@ -184,7 +184,48 @@ cd frontend
 npm install
 npm run start
 ```
-Once both servers are running, open your browser and navigate to [http://localhost:4200](http://localhost:4200).
+Once both servers are running, open your browser and navigate to [http://localhost:4201](http://localhost:4201).
+
+---
+
+## Docker Compose Mode (Production Ready)
+
+You can run the entire stack (FastAPI backend and Angular frontend) containerized using Docker Compose.
+
+### Quick Start
+
+1. **Required Ollama Setup**:
+   Ensure Ollama is running on your Windows host. You can check if Ollama is listening by running:
+   ```bash
+   curl http://localhost:11434/api/tags
+   ```
+
+2. **Docker Network / host.docker.internal Setup**:
+   - On Windows/macOS, Docker containers access the host automatically using `http://host.docker.internal:11434`.
+   - On Linux, if Docker doesn't map the gateway automatically, the `docker-compose.yml` configures `extra_hosts` to bind `host.docker.internal` to the host gateway.
+   - Ensure Ollama allows connection from WSL/containers. Set the environment variable `OLLAMA_HOST=0.0.0.0` on your Windows host before starting Ollama.
+
+3. **Start the containers**:
+   ```bash
+   docker compose up -d
+   ```
+
+4. **Verify Service URLs & Health Checks**:
+   - **Frontend Dashboard:** [http://localhost:4201](http://localhost:4201) (served via Nginx)
+   - **Backend API Gateway:** [http://localhost:8888](http://localhost:8888) (served via FastAPI)
+   - **Backend Health Check:** `curl http://localhost:8888/health` (should return `{"status":"healthy"}`)
+   - **Frontend Health Check:** `curl -I http://localhost:4201` (should return `200 OK`)
+
+5. **Stop and Rebuild Containers**:
+   - **Rebuild and restart:**
+     ```bash
+     docker compose up -d --build
+     ```
+   - **Stop containers:**
+     ```bash
+     docker compose down
+     ```
+
 
 ---
 
