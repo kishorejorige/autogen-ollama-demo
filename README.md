@@ -5,6 +5,10 @@ A **local-first Multi-Agent AI system** built with **Microsoft AutoGen** and **O
 This project demonstrates how to build and orchestrate multiple AI agents locally using open-source language models without relying on paid cloud APIs.
 
 ---
+![Release](https://img.shields.io/github/v/release/kishorejorige/autogen-ollama-demo)
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![Angular](https://img.shields.io/badge/Angular-20-red)
+![License](https://img.shields.io/github/license/kishorejorige/autogen-ollama-demo)
 
 # Features
 
