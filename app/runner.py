@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import uuid
 from collections.abc import AsyncGenerator
@@ -17,7 +18,11 @@ from agents.documenter import create_documentation_agent
 from agents.manager import create_manager_agent
 from agents.reviewer import create_code_reviewer_agent
 from agents.tester import create_tester_agent
+from app.database.models import WorkflowStatus
+from app.database.service import WorkflowPersistenceService
 from config.settings import OLLAMA_BASE_URL, OLLAMA_MODEL
+
+logger = logging.getLogger("runner")
 
 
 def create_team(model_client: OllamaChatCompletionClient) -> RoundRobinGroupChat:
@@ -151,7 +156,11 @@ async def run(task: str) -> None:
         await model_client.close()
 
 
-async def _run_loop_orchestration(team: RoundRobinGroupChat, task: str) -> AsyncGenerator[dict, None]:
+async def _run_loop_orchestration(
+    team: RoundRobinGroupChat,
+    task: str,
+    persistence_service: WorkflowPersistenceService | None = None,
+) -> AsyncGenerator[dict, None]:
     participants = getattr(team, "_participants", None) or getattr(team, "participants", [])
     manager = participants[0]
     developer = participants[1]
@@ -159,8 +168,11 @@ async def _run_loop_orchestration(team: RoundRobinGroupChat, task: str) -> Async
     tester = participants[3]
     documenter = participants[4]
 
+    service = persistence_service or WorkflowPersistenceService()
+
     workflow_id = str(uuid.uuid4())
     started_at = datetime.now(UTC).isoformat()
+    sequence_number = 0
 
     state = {
         "workflow_id": workflow_id,
@@ -197,6 +209,7 @@ async def _run_loop_orchestration(team: RoundRobinGroupChat, task: str) -> Async
         return evt
 
     try:
+        service.start_workflow(prompt=task, workflow_id=workflow_id)
         yield make_event("workflow_started")
         conversation_history = []
 
@@ -214,6 +227,8 @@ async def _run_loop_orchestration(team: RoundRobinGroupChat, task: str) -> Async
                 conversation_history.append(msg)
                 serialized = serialize_message(msg, iteration=1)
                 state["messages"].append(serialized)
+                sequence_number += 1
+                service.record_agent_message(workflow_id, serialized, sequence_number, iteration=1)
                 yield make_event("agent_message", serialized)
 
         yield make_event("agent_completed")
@@ -234,7 +249,6 @@ async def _run_loop_orchestration(team: RoundRobinGroupChat, task: str) -> Async
             state["current_agent"] = developer.name
             yield make_event("agent_started")
 
-            # Determine developer task input based on iteration count
             if iteration == 1:
                 dev_task = conversation_history
             else:
@@ -265,14 +279,18 @@ async def _run_loop_orchestration(team: RoundRobinGroupChat, task: str) -> Async
             async for msg in developer.run_stream(task=dev_task):
                 if isinstance(msg, TaskResult):
                     continue
-                # If we passed dev_task as a string, msg.id won't be in input_ids, but make sure to capture the developer output
                 if (iteration == 1 and msg.id not in input_ids and msg.source == developer.name) or (iteration > 1 and msg.source == developer.name):
                     dev_messages_this_turn.append(msg)
                     dev_messages.append(msg)
                     conversation_history.append(msg)
                     serialized = serialize_message(msg, iteration=iteration)
                     state["messages"].append(serialized)
+                    sequence_number += 1
+                    service.record_agent_message(workflow_id, serialized, sequence_number, iteration=iteration)
+
                     state["generated_files"] = extract_generated_files(state["messages"], iteration=iteration, is_final=False)
+                    service.record_generated_files(workflow_id, state["generated_files"], iteration=iteration, is_final=False)
+
                     yield make_event("agent_message", serialized)
 
             yield make_event("agent_completed")
@@ -291,6 +309,8 @@ async def _run_loop_orchestration(team: RoundRobinGroupChat, task: str) -> Async
                     conversation_history.append(msg)
                     serialized = serialize_message(msg, iteration=iteration)
                     state["messages"].append(serialized)
+                    sequence_number += 1
+                    service.record_agent_message(workflow_id, serialized, sequence_number, iteration=iteration)
                     yield make_event("agent_message", serialized)
 
             yield make_event("agent_completed")
@@ -321,6 +341,8 @@ async def _run_loop_orchestration(team: RoundRobinGroupChat, task: str) -> Async
                     conversation_history.append(msg)
                     serialized = serialize_message(msg, iteration=iteration)
                     state["messages"].append(serialized)
+                    sequence_number += 1
+                    service.record_agent_message(workflow_id, serialized, sequence_number, iteration=iteration)
                     yield make_event("agent_message", serialized)
 
             yield make_event("agent_completed")
@@ -338,14 +360,28 @@ async def _run_loop_orchestration(team: RoundRobinGroupChat, task: str) -> Async
             })
 
             # Record iteration history
+            dev_resp = dev_messages_this_turn[-1].content if dev_messages_this_turn else ""
+            rev_resp = reviewer_messages_this_turn[-1].content if reviewer_messages_this_turn else ""
+            tst_resp = tester_messages_this_turn[-1].content if tester_messages_this_turn else ""
+
             state["iteration_history"].append({
                 "iteration": iteration,
                 "reviewer_status": rev_status,
                 "tester_status": test_status,
-                "developer_response": dev_messages_this_turn[-1].content if dev_messages_this_turn else "",
-                "reviewer_response": reviewer_messages_this_turn[-1].content if reviewer_messages_this_turn else "",
-                "tester_response": tester_messages_this_turn[-1].content if tester_messages_this_turn else ""
+                "developer_response": dev_resp,
+                "reviewer_response": rev_resp,
+                "tester_response": tst_resp
             })
+
+            service.record_iteration(
+                workflow_id=workflow_id,
+                iteration=iteration,
+                review_status=rev_status,
+                test_status=test_status,
+                developer_output=dev_resp,
+                reviewer_feedback=rev_resp,
+                tester_feedback=tst_resp
+            )
 
             # Check loop termination conditions
             if rev_status == "APPROVED" and test_status == "PASS":
@@ -369,32 +405,42 @@ async def _run_loop_orchestration(team: RoundRobinGroupChat, task: str) -> Async
                     conversation_history.append(msg)
                     serialized = serialize_message(msg, iteration=state["current_iteration"])
                     state["messages"].append(serialized)
+                    sequence_number += 1
+                    service.record_agent_message(workflow_id, serialized, sequence_number, iteration=state["current_iteration"])
                     yield make_event("agent_message", serialized)
 
             yield make_event("agent_completed")
 
             state["status"] = "COMPLETE"
             state["completed_at"] = datetime.now(UTC).isoformat()
-            # Mark final files
             state["generated_files"] = extract_generated_files(state["messages"], iteration=state["current_iteration"], is_final=True)
+
+            summary = "Workflow finished successfully. Review APPROVED and tests PASSED."
+            service.record_generated_files(workflow_id, state["generated_files"], iteration=state["current_iteration"], is_final=True)
+            service.finish_workflow(workflow_id, status=WorkflowStatus.COMPLETE, final_summary=summary, total_iterations=state["current_iteration"])
+
             yield make_event("workflow_completed", {
                 "id": "result",
                 "source": "system",
                 "type": "TaskResult",
-                "content": "Workflow finished successfully. Review APPROVED and tests PASSED.",
+                "content": summary,
                 "created_at": datetime.now(UTC).isoformat(),
                 "metadata": {"stop_reason": "APPROVED_AND_PASSED", "iteration": state["current_iteration"]}
             })
         else:
             state["status"] = "NEEDS_ATTENTION"
             state["completed_at"] = datetime.now(UTC).isoformat()
-            # Mark final files anyway
             state["generated_files"] = extract_generated_files(state["messages"], iteration=state["current_iteration"], is_final=True)
+
+            summary = "Workflow finished with NEEDS_ATTENTION. Maximum iterations reached without approval."
+            service.record_generated_files(workflow_id, state["generated_files"], iteration=state["current_iteration"], is_final=True)
+            service.finish_workflow(workflow_id, status=WorkflowStatus.NEEDS_ATTENTION, final_summary=summary, total_iterations=state["current_iteration"])
+
             yield make_event("workflow_needs_attention", {
                 "id": "result",
                 "source": "system",
                 "type": "TaskResult",
-                "content": "Workflow finished with NEEDS_ATTENTION. Maximum iterations reached without approval.",
+                "content": summary,
                 "created_at": datetime.now(UTC).isoformat(),
                 "metadata": {"stop_reason": "MAX_ITERATIONS_REACHED", "iteration": state["current_iteration"]}
             })
@@ -403,8 +449,14 @@ async def _run_loop_orchestration(team: RoundRobinGroupChat, task: str) -> Async
         state["status"] = "FAILED"
         state["error"] = str(e)
         state["completed_at"] = datetime.now(UTC).isoformat()
-        # Mark final files anyway
         state["generated_files"] = extract_generated_files(state["messages"], iteration=state["current_iteration"], is_final=True)
+
+        try:
+            service.record_generated_files(workflow_id, state["generated_files"], iteration=state["current_iteration"], is_final=True)
+            service.mark_failed(workflow_id, error_message=str(e), total_iterations=state["current_iteration"])
+        except Exception:
+            logger.exception("Failed to record workflow failure in database")
+
         yield make_event("workflow_failed", {
             "id": "error",
             "source": "error",
@@ -416,7 +468,7 @@ async def _run_loop_orchestration(team: RoundRobinGroupChat, task: str) -> Async
         raise
 
 
-async def run_workflow(task: str) -> dict:
+async def run_workflow(task: str, persistence_service: WorkflowPersistenceService | None = None) -> dict:
     model_client = OllamaChatCompletionClient(
         model=OLLAMA_MODEL,
         host=OLLAMA_BASE_URL,
@@ -433,7 +485,7 @@ async def run_workflow(task: str) -> dict:
             }
 
         final_state = None
-        async for event in _run_loop_orchestration(team, task):
+        async for event in _run_loop_orchestration(team, task, persistence_service=persistence_service):
             if "workflow_state" in event:
                 final_state = event["workflow_state"]
 
@@ -451,7 +503,7 @@ async def run_workflow(task: str) -> dict:
         await model_client.close()
 
 
-async def run_workflow_stream(task: str) -> AsyncGenerator[dict, None]:
+async def run_workflow_stream(task: str, persistence_service: WorkflowPersistenceService | None = None) -> AsyncGenerator[dict, None]:
     model_client = OllamaChatCompletionClient(
         model=OLLAMA_MODEL,
         host=OLLAMA_BASE_URL,
@@ -464,7 +516,7 @@ async def run_workflow_stream(task: str) -> AsyncGenerator[dict, None]:
                 yield serialize_message(event)
             return
 
-        async for event in _run_loop_orchestration(team, task):
+        async for event in _run_loop_orchestration(team, task, persistence_service=persistence_service):
             yield event
     finally:
         await model_client.close()

@@ -9,6 +9,7 @@ dependencies = [
     "autogen-ext[ollama]>=0.7.5",
     "fastapi>=0.140.0",
     "python-dotenv>=1.2.2",
+    "sqlalchemy>=2.0.0",
     "uvicorn>=0.51.0",
 ]
 
@@ -21,3 +22,5 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 
+[tool.ruff.lint]
+ignore = ["B008"]

@@ -1,3 +1,5 @@
+export type WorkflowStatusType = 'RUNNING' | 'COMPLETE' | 'NEEDS_ATTENTION' | 'FAILED';
+
 export interface GeneratedFile {
   filename: string;
   content: string;
@@ -55,4 +57,80 @@ export interface TaskResponse {
 
 export interface HealthResponse {
   status: string;
+}
+
+// --- History API Models ---
+
+export interface WorkflowSummary {
+  id: string;
+  prompt: string;
+  status: WorkflowStatusType;
+  total_iterations: number;
+  generated_file_count: number;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface WorkflowListResponse {
+  items: WorkflowSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface WorkflowIteration {
+  id: number;
+  workflow_id: string;
+  iteration_number: number;
+  review_status: string | null;
+  test_status: string | null;
+  developer_output: string | null;
+  reviewer_feedback: string | null;
+  tester_feedback: string | null;
+  created_at: string;
+}
+
+export interface AgentMessage {
+  id: string;
+  workflow_id: string;
+  iteration_id: number | null;
+  agent_name: string;
+  role: string;
+  content: string;
+  sequence_number: number;
+  created_at: string;
+}
+
+export interface StoredGeneratedFile {
+  id: string;
+  workflow_id: string;
+  iteration_id: number | null;
+  filename: string;
+  language: string;
+  content: string;
+  is_final: boolean;
+  created_at: string;
+}
+
+export interface WorkflowDetail {
+  id: string;
+  prompt: string;
+  status: WorkflowStatusType;
+  final_summary: string | null;
+  total_iterations: number;
+  generated_file_count: number;
+  created_at: string;
+  completed_at: string | null;
+  iterations: WorkflowIteration[];
+  messages: AgentMessage[];
+  generated_files: StoredGeneratedFile[];
+}
+
+export interface WorkflowStats {
+  total_workflows: number;
+  completed_workflows: number;
+  failed_workflows: number;
+  needs_attention_workflows: number;
+  running_workflows: number;
+  average_iterations: number;
 }

@@ -9,3 +9,8 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+# SQLite Database
+data/*.db
+data/*.db-shm
+data/*.db-wal

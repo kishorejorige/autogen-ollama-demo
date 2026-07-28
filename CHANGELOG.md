@@ -6,6 +6,19 @@ The format is inspired by **Keep a Changelog**, and this project follows **Seman
 
 ---
 
+## [0.8.0] - Unreleased
+
+### Added
+
+- **Workflow Memory & Database Storage**: Persistent storage of complete and failed Loop Engineering workflows in SQLite using SQLAlchemy ORM (`app/database`).
+- **History & Memory UI**: Angular History interface with paginated list, search bar by prompt, status filter dropdown, and summary statistics cards.
+- **Workflow Detail Inspector**: In-depth workflow detail view with tabs for Overview Summary, Iterations Timeline (with collapsible feedback sections), Agent Messages Feed (ordered by sequence number), and Generated Files (with final artifacts listed first).
+- **Run Again & Delete**: "Run Again" action populating previous prompts into the New Workflow tab without auto-starting execution, and confirmation modal for workflow deletion.
+- **Docker Persistence**: Volume mount `./data:/app/data` in `docker-compose.yml` guaranteeing workflow database survival across container rebuilds.
+- **FastAPI History Endpoints**: RESTful history API endpoints for listing workflows, retrieving workflow statistics, inspecting workflow details, and deleting workflows.
+
+---
+
 ## [0.7.0] - Unreleased
 
 ### Added
