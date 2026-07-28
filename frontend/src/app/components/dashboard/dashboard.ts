@@ -5,6 +5,9 @@ import { MessageResponse, GeneratedFile, WorkflowState } from '../../models/chat
 import { HealthStatus } from '../health-status/health-status';
 import { ChatInput } from '../chat-input/chat-input';
 import { ResponseCards } from '../response-cards/response-cards';
+import { MainNavComponent, ActiveTabType } from '../main-nav/main-nav';
+import { HistoryListComponent } from '../history-list/history-list';
+import { HistoryDetailComponent } from '../history-detail/history-detail';
 
 interface ProgressStep {
   id: string;
@@ -17,7 +20,15 @@ interface ProgressStep {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, HealthStatus, ChatInput, ResponseCards],
+  imports: [
+    CommonModule,
+    HealthStatus,
+    ChatInput,
+    ResponseCards,
+    MainNavComponent,
+    HistoryListComponent,
+    HistoryDetailComponent,
+  ],
   template: `
     <div class="dashboard-wrapper">
       <!-- Header -->
@@ -29,15 +40,30 @@ interface ProgressStep {
             <p class="subtitle">Local Multi-Agent AI Team</p>
           </div>
         </div>
+
+        <app-main-nav
+          [activeTab]="currentNavTab()"
+          [artifactCount]="files().length"
+          (tabChange)="onNavTabChange($event)"
+        ></app-main-nav>
+
         <app-health-status></app-health-status>
       </header>
 
-      <!-- Main Grid Layout -->
-      <main class="content-grid">
+      <!-- Main Navigation Views -->
+
+      <!-- VIEW 1: NEW WORKFLOW (Default) -->
+      <main class="content-grid" *ngIf="currentNavTab() === 'new_workflow'">
         <!-- Left column: Input & Progress -->
         <section class="control-panel">
+          <!-- History Loaded Banner -->
+          <div class="history-notice animate-fade-in" *ngIf="historyNotice()">
+            <span>ℹ️ {{ historyNotice() }}</span>
+          </div>
+
           <app-chat-input
             [disabled]="loading()"
+            [initialText]="promptFromHistory()"
             (run)="onExecuteTask($event)"
             (clear)="onClearResults()"
           ></app-chat-input>
@@ -167,6 +193,70 @@ interface ProgressStep {
           </div>
         </section>
       </main>
+
+      <!-- VIEW 2: GENERATED FILES TAB -->
+      <main class="artifacts-page animate-fade-in" *ngIf="currentNavTab() === 'generated_files'">
+        <div class="output-section">
+          <div class="section-header">
+            <h3>📦 Current Session Generated Artifacts</h3>
+            <span class="file-count" *ngIf="files().length > 0">{{ files().length }} File{{ files().length === 1 ? '' : 's' }}</span>
+          </div>
+
+          <div class="empty-state" *ngIf="files().length === 0">
+            <div class="empty-icon">📂</div>
+            <h4>No generated files yet</h4>
+            <p>Run a workflow to generate code artifacts with the multi-agent developer team.</p>
+          </div>
+
+          <div class="artifacts-viewer animate-fade-in" *ngIf="files().length > 0">
+            <div class="artifacts-sidebar">
+              <div
+                class="file-item"
+                *ngFor="let file of files()"
+                [ngClass]="{active: activeFile()?.filename === file.filename}"
+                (click)="activeFile.set(file)"
+              >
+                <span class="file-icon">📄</span>
+                <span class="file-name">{{ file.filename }}</span>
+              </div>
+            </div>
+            <div class="code-editor-container" *ngIf="activeFile() as file">
+              <div class="editor-header">
+                <span class="editor-filename">💻 {{ file.filename }}</span>
+                <div class="editor-actions">
+                  <button class="action-btn copy-btn" (click)="copyCode(file)">
+                    <span *ngIf="copyConfirmation() !== file.filename">📋 Copy Code</span>
+                    <span *ngIf="copyConfirmation() === file.filename">✓ Copied!</span>
+                  </button>
+                  <button class="action-btn download-btn" (click)="downloadFile(file)">
+                    📥 Download
+                  </button>
+                </div>
+              </div>
+              <div class="editor-body">
+                <pre class="code-pre"><code><div class="code-line" *ngFor="let line of getCodeLines(file.content); let idx = index"><span class="line-number">{{ idx + 1 }}</span><span class="line-content">{{ line }}</span></div></code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- VIEW 3: HISTORY & MEMORY TAB -->
+      <main class="history-page animate-fade-in" *ngIf="currentNavTab() === 'history'">
+        <app-history-list
+          *ngIf="!selectedWorkflowId()"
+          (selectWorkflow)="onSelectWorkflow($event)"
+          (runAgain)="onRunAgainFromHistory($event)"
+        ></app-history-list>
+
+        <app-history-detail
+          *ngIf="selectedWorkflowId()"
+          [workflowId]="selectedWorkflowId()"
+          (back)="onBackToHistoryList()"
+          (runAgain)="onRunAgainFromHistory($event)"
+          (deleted)="onWorkflowDeleted()"
+        ></app-history-detail>
+      </main>
     </div>
   `,
   styles: [`
@@ -186,6 +276,8 @@ interface ProgressStep {
       align-items: center;
       border-bottom: 1px solid #e2e8f0;
       padding-bottom: 1.25rem;
+      gap: 1rem;
+      flex-wrap: wrap;
     }
     .header-left {
       display: flex;
@@ -214,6 +306,15 @@ interface ProgressStep {
       font-size: 0.9rem;
       color: #64748b;
       margin: 0.2rem 0 0 0;
+      font-weight: 500;
+    }
+    .history-notice {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      color: #1d4ed8;
+      font-size: 0.85rem;
       font-weight: 500;
     }
     .content-grid {
@@ -387,7 +488,6 @@ interface ProgressStep {
       color: #94a3b8;
     }
 
-    /* Step status classes */
     .step-item.running .step-icon-wrapper {
       border-color: #3b82f6;
       background: #eff6ff;
@@ -459,6 +559,19 @@ interface ProgressStep {
       padding-bottom: 0.5rem;
       margin-bottom: 0.5rem;
     }
+    .section-header h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      color: #0f172a;
+    }
+    .file-count {
+      font-size: 0.85rem;
+      background: #eff6ff;
+      color: #2563eb;
+      font-weight: 700;
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+    }
     .section-tabs {
       display: flex;
       gap: 0.5rem;
@@ -482,16 +595,6 @@ interface ProgressStep {
     .tab-btn.active {
       color: #2563eb;
       background: #eff6ff;
-    }
-    .tab-btn.active::after {
-      content: '';
-      position: absolute;
-      bottom: -6px;
-      left: 1rem;
-      right: 1rem;
-      height: 3px;
-      background: #2563eb;
-      border-radius: 9999px;
     }
     .status-indicator {
       display: inline-flex;
@@ -592,7 +695,6 @@ interface ProgressStep {
       font-weight: 500;
     }
 
-    /* Artifacts Viewer */
     .artifacts-viewer {
       display: grid;
       grid-template-columns: 200px 1fr;
@@ -712,14 +814,11 @@ interface ProgressStep {
       white-space: pre;
     }
 
-    /* Animations */
     .animate-fade-in {
       animation: fadeIn 0.4s ease forwards;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes pulse {
       0%, 100% { transform: scaleY(1); }
       50% { transform: scaleY(0.4); }
@@ -736,6 +835,12 @@ interface ProgressStep {
 })
 export class DashboardComponent {
   private readonly apiService = inject(ApiService);
+
+  public readonly currentNavTab = signal<ActiveTabType>('new_workflow');
+  public readonly selectedWorkflowId = signal<string | null>(null);
+  public readonly promptFromHistory = signal<string>('');
+  public readonly historyNotice = signal<string | null>(null);
+
   public readonly messages = signal<MessageResponse[]>([]);
   public readonly loading = signal(false);
   public readonly error = signal<string | null>(null);
@@ -777,6 +882,35 @@ export class DashboardComponent {
     }
   }
 
+  onNavTabChange(tab: ActiveTabType) {
+    this.currentNavTab.set(tab);
+    if (tab === 'history') {
+      this.selectedWorkflowId.set(null);
+    }
+  }
+
+  onSelectWorkflow(id: string) {
+    this.selectedWorkflowId.set(id);
+  }
+
+  onBackToHistoryList() {
+    this.selectedWorkflowId.set(null);
+  }
+
+  onWorkflowDeleted() {
+    this.selectedWorkflowId.set(null);
+  }
+
+  onRunAgainFromHistory(prompt: string) {
+    this.promptFromHistory.set(prompt);
+    this.currentNavTab.set('new_workflow');
+    this.historyNotice.set('Loaded prompt from history. Review and click "Run Workflow" to execute.');
+
+    setTimeout(() => {
+      this.historyNotice.set(null);
+    }, 5000);
+  }
+
   onExecuteTask(task: string) {
     this.loading.set(true);
     this.error.set(null);
@@ -796,7 +930,6 @@ export class DashboardComponent {
       next: (res) => {
         if (res.source === 'user') return;
 
-        // Save entire workflow state if returned
         if (res.workflow_state) {
           this.workflowState.set(res.workflow_state);
           this.updateProgressFromState(res.workflow_state);
@@ -807,7 +940,6 @@ export class DashboardComponent {
           }
         }
 
-        // If the event is a TaskResult (meaning the workflow is done)
         if (res.type === 'TaskResult' || res.id === 'result') {
           const ws = this.workflowState();
           if (ws) {
@@ -832,7 +964,6 @@ export class DashboardComponent {
           return;
         }
 
-        // Check if error message
         if (res.type === 'Error' || res.source === 'error') {
           this.error.set(res.content || 'An unexpected error occurred during agent execution.');
           this.workflowStatus.set('failed');
@@ -846,10 +977,8 @@ export class DashboardComponent {
           return;
         }
 
-        // Add message to feed
         this.messages.update(msgs => [...msgs, res]);
 
-        // Progress step fallback if state is not present
         if (!res.workflow_state) {
           this.updateProgressSteps(res);
         }
@@ -928,10 +1057,11 @@ export class DashboardComponent {
     this.activeFile.set(null);
     this.activeTab.set('feed');
     this.workflowStatus.set('idle');
+    this.promptFromHistory.set('');
+    this.historyNotice.set(null);
     this.steps.update(steps => steps.map(s => ({ ...s, status: 'idle' })));
   }
 
-  // Artifact helpers
   getCodeLines(content: string): string[] {
     if (!content) return [];
     return content.split('\n');

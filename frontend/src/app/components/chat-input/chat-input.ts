@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -149,14 +149,22 @@ import { FormsModule } from '@angular/forms';
     }
   `]
 })
-export class ChatInput {
+export class ChatInput implements OnChanges {
   @Input() disabled: boolean = false;
+  @Input() initialText: string = '';
   @Output() run = new EventEmitter<string>();
   @Output() clear = new EventEmitter<void>();
 
   protected readonly maxChars = 5000;
   protected rawText = '';
   public readonly text = signal('');
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes['initialText'] && changes['initialText'].currentValue !== undefined) {
+      this.rawText = changes['initialText'].currentValue;
+      this.text.set(this.rawText || '');
+    }
+  }
 
   onTextChange(val: string) {
     this.text.set(val || '');
