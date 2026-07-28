@@ -19,6 +19,10 @@ This project demonstrates how to build and orchestrate multiple AI agents locall
 - 🧪 Tester Agent (identifies defects & suggests test cases)
 - 📝 Documentation Agent (writes manuals and usage guides)
 - 🔄 Bounded Loop Engineering workflow (max 3 retry-repair cycles)
+- 💾 Workflow Memory & SQLite Persistence (`app/database`)
+- 📜 History & Memory UI Interface with search, status filtering, and statistics cards
+- 🔍 Workflow Detail Inspector (Overview, Iterations Timeline, Messages Feed, Generated Artifacts)
+- ⚡ Run Again action (loads prompt into New Workflow tab without auto-executing)
 - 🦙 Ollama Integration (local AI models execution)
 - ⚙️ Environment-based Configuration
 - 📦 Tabbed UI Panel (Response Feed & Generated Artifacts side-by-side)
@@ -40,9 +44,11 @@ This project demonstrates how to build and orchestrate multiple AI agents locall
 | Documentation Agent | ✅ Complete |
 | Bounded Loop Engineering | ✅ Complete |
 | Code Copy / Download UI | ✅ Complete |
+| Workflow Memory & Database Persistence | ✅ Complete |
+| Frontend History Interface | ✅ Complete |
 | Automated Tests | ✅ Complete |
 | GitHub Actions CI | ✅ Complete |
-| Docker Support | ✅ Complete |
+| Docker Support & Volume Persistence | ✅ Complete |
 
 ---
 
@@ -233,6 +239,49 @@ You can run the entire stack (FastAPI backend and Angular frontend) containerize
      docker compose down
      ```
 
+
+---
+
+# Workflow Memory & History
+
+AutoGen Orchestrator automatically records every completed, failed, or interrupted Loop Engineering workflow in an embedded SQLite database.
+
+## Database Configuration
+
+- **Default Location**: `./data/autogen_demo.db`
+- **Environment Variable**: `DATABASE_URL` (e.g. `sqlite:///./data/autogen_demo.db` or PostgreSQL connection string).
+- **SQLite Pragmas**: `check_same_thread=False` and `PRAGMA foreign_keys=ON` are enforced automatically.
+
+## History API Endpoints
+
+- `GET /api/workflows`: List workflows with pagination (`limit`, `offset`), case-insensitive `search` on prompts, and `status` filtering (`COMPLETE`, `NEEDS_ATTENTION`, `FAILED`, `RUNNING`).
+- `GET /api/workflows/stats`: Get summary metrics (total, completed, failed, needs attention, running workflows, and average iterations).
+- `GET /api/workflows/{workflow_id}`: Retrieve full detail of a workflow including sorted iterations, ordered agent messages, and generated files with final artifacts listed first.
+- `DELETE /api/workflows/{workflow_id}`: Delete a workflow and cascade delete all associated iterations, messages, and files.
+
+## Docker Data Persistence
+
+`docker-compose.yml` mounts `./data:/app/data` into the backend container so SQLite database records survive container restarts and rebuilds.
+
+> Note: Running `docker compose down -v` with named volumes removes volume data. The host bind mount `./data:/app/data` preserves your SQLite database file.
+
+## "Run Again" Behavior
+
+Clicking "Run Again" on any workflow card or detail view copies the original prompt into the **New Workflow** input box and switches to the input view without automatically executing the task.
+
+## Clearing Local History
+
+You can clear workflow history by:
+1. Using the **Delete Workflow** button inside any workflow detail view in the web UI.
+2. Stopping the server and removing the SQLite database file:
+   ```bash
+   rm data/autogen_demo.db*
+   ```
+
+## Current Limitations
+
+- History queries run directly against the local SQLite database. High-throughput concurrency environments should configure PostgreSQL via `DATABASE_URL`.
+- Workflows running concurrently share short-lived database transactions.
 
 ---
 
