@@ -20,6 +20,9 @@ This project demonstrates how to build and orchestrate multiple AI agents locall
 - 📝 Documentation Agent (writes manuals and usage guides)
 - 🔄 Bounded Loop Engineering workflow (max 3 retry-repair cycles)
 - 💾 Workflow Memory & SQLite Persistence (`app/database`)
+- 📄 Workflow Export (JSON payload backup and ZIP file archive download)
+- ⭐ Favorites System (toggle favorites & analytics tracking)
+- 📅 Date-Range Filtering (Today, Last 7 Days, Last 30 Days in UTC)
 - 📜 History & Memory UI Interface with search, status filtering, and statistics cards
 - 🔍 Workflow Detail Inspector (Overview, Iterations Timeline, Messages Feed, Generated Artifacts)
 - ⚡ Run Again action (loads prompt into New Workflow tab without auto-executing)
@@ -46,6 +49,9 @@ This project demonstrates how to build and orchestrate multiple AI agents locall
 | Code Copy / Download UI | ✅ Complete |
 | Workflow Memory & Database Persistence | ✅ Complete |
 | Frontend History Interface | ✅ Complete |
+| Workflow Export (JSON & ZIP) | ✅ Complete |
+| Favorite Toggles & Analytics | ✅ Complete |
+| Date-Range Filtering | ✅ Complete |
 | Automated Tests | ✅ Complete |
 | GitHub Actions CI | ✅ Complete |
 | Docker Support & Volume Persistence | ✅ Complete |

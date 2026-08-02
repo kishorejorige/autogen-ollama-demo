@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by **Keep a Changelog**, and this project follows **Semantic Versioning (SemVer)**.
 
+## [0.9.0] - Unreleased
+
+### Added
+
+- **Workflow Export (JSON & ZIP)**: Endpoints `GET /api/workflows/{id}/export/json` and `GET /api/workflows/{id}/export/zip` to download full workflow state backup or zipped code artifacts (with auto-generated README.md if not present).
+- **Sanitized ZIP Archives**: Path traversal protection, entry name sanitization, and duplicate file name handling.
+- **Workflow Favorites**: Mark and unmark workflows as favorites (`POST /api/workflows/{id}/favorite` and `DELETE /api/workflows/{id}/favorite`) with ⭐ favorite toggle buttons on history cards and detail inspector.
+- **Date-Range Filtering**: Optional query parameter `date_range` (`today`, `7d`, `30d`) on `GET /api/workflows` using UTC time boundaries, with strict 400 Bad Request validation for invalid range values.
+- **Analytics & Stats Enhancements**: Extended `GET /api/workflows/stats` response and UI cards for Favorites count (`favorite_count`) and Average Iterations (`average_iterations`).
+- **Frontend & Backend Test Suites**: Added test coverage for JSON/ZIP export, favorite toggles, date filtering, analytics cards, legacy SQLite schema migration, and export errors.
+
 ---
 
 ## [0.8.0] - Unreleased
