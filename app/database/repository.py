@@ -58,7 +58,7 @@ class WorkflowRepository:
     def get_favorites(self, limit: int = 10, offset: int = 0) -> tuple[list[Workflow], int]:
         limit = max(1, min(limit, 100))
         offset = max(0, offset)
-        query = select(Workflow).where(Workflow.favorite == True) # noqa: E712
+        query = select(Workflow).where(Workflow.favorite.is_(True))
         total_count = self.db.scalar(select(func.count()).select_from(query.subquery())) or 0
         ordered_query = query.order_by(Workflow.created_at.desc()).offset(offset).limit(limit)
         items = list(self.db.scalars(ordered_query).all())
@@ -314,7 +314,7 @@ class WorkflowRepository:
         )
         favorite_count = (
             self.db.scalar(
-                select(func.count(Workflow.id)).where(Workflow.favorite == True)  # noqa: E712
+                select(func.count(Workflow.id)).where(Workflow.favorite.is_(True))
             )
             or 0
         )

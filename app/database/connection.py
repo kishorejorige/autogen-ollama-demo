@@ -48,6 +48,11 @@ class Base(DeclarativeBase):
     pass
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 def init_db(target_engine: Engine | None = None) -> None:
     eng = target_engine or engine
     Base.metadata.create_all(bind=eng)
@@ -61,8 +66,8 @@ def init_db(target_engine: Engine | None = None) -> None:
                 if "favorite" not in columns:
                     conn.execute(text("ALTER TABLE workflows ADD COLUMN favorite BOOLEAN DEFAULT 0"))
                     conn.commit()
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            logger.debug("Migration notice: %s", e)
 
 
 # Automatically create tables for the default engine
