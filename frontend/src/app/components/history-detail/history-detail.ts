@@ -18,6 +18,15 @@ type DetailTabType = 'summary' | 'iterations' | 'messages' | 'artifacts';
         </button>
 
         <div class="top-actions">
+          <button class="action-btn fav-btn" [class.is-fav]="detail()?.favorite" (click)="toggleFavorite()">
+            {{ detail()?.favorite ? '⭐ Favorite' : '☆ Mark Favorite' }}
+          </button>
+          <button class="action-btn export-btn" (click)="exportJson()">
+            📄 Export JSON
+          </button>
+          <button class="action-btn download-zip-btn" (click)="downloadZip()">
+            📦 Download ZIP
+          </button>
           <button class="action-btn run-again-btn" (click)="onRunAgain()">
             ⚡ Run Again
           </button>
@@ -307,6 +316,16 @@ type DetailTabType = 'summary' | 'iterations' | 'messages' | 'artifacts';
     .back-btn { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
     .back-btn:hover { background: #e2e8f0; color: #0f172a; }
 
+    .fav-btn { background: #fef9c3; color: #a16207; border-color: #fef08a; }
+    .fav-btn:hover { background: #fef08a; }
+    .fav-btn.is-fav { background: #fef08a; color: #854d0e; font-weight: 700; }
+
+    .export-btn { background: #f0f9ff; color: #0369a1; border-color: #bae6fd; }
+    .export-btn:hover { background: #e0f2fe; }
+
+    .download-zip-btn { background: #faf5ff; color: #7e22ce; border-color: #e9d5ff; }
+    .download-zip-btn:hover { background: #f3e8ff; }
+
     .run-again-btn { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
     .run-again-btn:hover { background: #dcfce7; }
 
@@ -527,6 +546,56 @@ export class HistoryDetailComponent implements OnInit {
     if (this.detail()) {
       this.runAgain.emit(this.detail()!.prompt);
     }
+  }
+
+  toggleFavorite() {
+    if (!this.detail() || !this.workflowId) return;
+
+    const currentFav = this.detail()!.favorite;
+    const action$ = currentFav
+      ? this.historyService.removeFavorite(this.workflowId)
+      : this.historyService.markFavorite(this.workflowId);
+
+    action$.subscribe({
+      next: (updated) => {
+        this.detail.update((d) => (d ? { ...d, favorite: updated.favorite } : d));
+      },
+      error: (err) => alert('Failed to toggle favorite: ' + (err.message || 'Unknown error')),
+    });
+  }
+
+  exportJson() {
+    if (!this.workflowId) return;
+
+    this.historyService.exportJson(this.workflowId).subscribe({
+      next: (data) => {
+        const jsonStr = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `workflow_${this.workflowId}.json`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      },
+      error: (err) => alert('Failed to export JSON: ' + (err.message || 'Unknown error')),
+    });
+  }
+
+  downloadZip() {
+    if (!this.workflowId) return;
+
+    this.historyService.downloadZip(this.workflowId).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `workflow_${this.workflowId}.zip`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      },
+      error: (err) => alert('Failed to download ZIP: ' + (err.message || 'Unknown error')),
+    });
   }
 
   confirmDelete() {

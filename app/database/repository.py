@@ -34,12 +34,63 @@ class WorkflowRepository:
             select(Workflow).where(Workflow.id == workflow_id)
         ).first()
 
+    def get_full_workflow(self, workflow_id: str) -> Workflow | None:
+        return self.get_workflow(workflow_id)
+
+    def mark_favorite(self, workflow_id: str) -> Workflow | None:
+        workflow = self.get_workflow(workflow_id)
+        if not workflow:
+            return None
+        workflow.favorite = True
+        self.db.commit()
+        self.db.refresh(workflow)
+        return workflow
+
+    def remove_favorite(self, workflow_id: str) -> Workflow | None:
+        workflow = self.get_workflow(workflow_id)
+        if not workflow:
+            return None
+        workflow.favorite = False
+        self.db.commit()
+        self.db.refresh(workflow)
+        return workflow
+
+    def get_favorites(self, limit: int = 10, offset: int = 0) -> tuple[list[Workflow], int]:
+        limit = max(1, min(limit, 100))
+        offset = max(0, offset)
+        query = select(Workflow).where(Workflow.favorite.is_(True))
+        total_count = self.db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        ordered_query = query.order_by(Workflow.created_at.desc()).offset(offset).limit(limit)
+        items = list(self.db.scalars(ordered_query).all())
+        return items, total_count
+
+    def filter_by_date(self, query, date_range: str | None):
+        if not date_range:
+            return query
+
+        norm_range = date_range.strip().lower()
+        now = datetime.now(UTC)
+
+        if norm_range == "today":
+            start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif norm_range == "7d":
+            from datetime import timedelta
+            start_time = now - timedelta(days=7)
+        elif norm_range == "30d":
+            from datetime import timedelta
+            start_time = now - timedelta(days=30)
+        else:
+            raise ValueError(f"Invalid date_range: {date_range}")
+
+        return query.where(Workflow.created_at >= start_time)
+
     def list_workflows(
         self,
         limit: int = 10,
         offset: int = 0,
         search: str | None = None,
         status: str | None = None,
+        date_range: str | None = None,
     ) -> tuple[list[Workflow], int]:
         limit = max(1, min(limit, 100))
         offset = max(0, offset)
@@ -63,6 +114,9 @@ class WorkflowRepository:
             else:
                 # If invalid status passed, match nothing or return empty
                 return [], 0
+
+        if date_range:
+            query = self.filter_by_date(query, date_range)
 
         total_count = self.db.scalar(select(func.count()).select_from(query.subquery())) or 0
 
@@ -258,6 +312,12 @@ class WorkflowRepository:
             )
             or 0
         )
+        favorite_count = (
+            self.db.scalar(
+                select(func.count(Workflow.id)).where(Workflow.favorite.is_(True))
+            )
+            or 0
+        )
 
         avg_iter = (
             self.db.scalar(select(func.avg(Workflow.total_iterations)))
@@ -270,5 +330,6 @@ class WorkflowRepository:
             "failed_workflows": failed_workflows,
             "needs_attention_workflows": needs_attention_workflows,
             "running_workflows": running_workflows,
+            "favorite_count": favorite_count,
             "average_iterations": round(float(avg_iter), 2),
         }

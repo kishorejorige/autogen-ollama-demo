@@ -35,6 +35,7 @@ class Workflow(Base):
     status: Mapped[str] = mapped_column(String(30), nullable=False, default=WorkflowStatus.RUNNING)
     final_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     total_iterations: Mapped[int] = mapped_column(Integer, default=0)
+    favorite: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -68,6 +69,7 @@ class Workflow(Base):
             "status": self.status,
             "final_summary": self.final_summary,
             "total_iterations": self.total_iterations,
+            "favorite": bool(self.favorite) if self.favorite is not None else False,
             "created_at": self.created_at.isoformat() if self.created_at else "",
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "generated_file_count": len(self.generated_files),

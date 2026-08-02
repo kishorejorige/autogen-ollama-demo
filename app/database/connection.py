@@ -48,9 +48,26 @@ class Base(DeclarativeBase):
     pass
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 def init_db(target_engine: Engine | None = None) -> None:
     eng = target_engine or engine
     Base.metadata.create_all(bind=eng)
+
+    with eng.connect() as conn:
+        try:
+            from sqlalchemy import inspect, text
+            inspector = inspect(conn)
+            if "workflows" in inspector.get_table_names():
+                columns = [c["name"] for c in inspector.get_columns("workflows")]
+                if "favorite" not in columns:
+                    conn.execute(text("ALTER TABLE workflows ADD COLUMN favorite BOOLEAN DEFAULT 0"))
+                    conn.commit()
+        except Exception as e:  # noqa: BLE001
+            logger.debug("Migration notice: %s", e)
 
 
 # Automatically create tables for the default engine

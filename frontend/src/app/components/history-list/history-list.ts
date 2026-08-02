@@ -35,6 +35,13 @@ import { HistoryStatsComponent } from '../history-stats/history-stats';
             <option value="RUNNING">🔄 Running</option>
           </select>
 
+          <select [value]="dateRangeFilter()" (change)="onDateRangeFilterChange($event)" class="filter-select date-filter">
+            <option value="">All Time</option>
+            <option value="today">Today</option>
+            <option value="7d">Last 7 Days</option>
+            <option value="30d">Last 30 Days</option>
+          </select>
+
           <button class="action-btn refresh-btn" (click)="loadData()" [disabled]="loading()">
             <span [class.spinner]="loading()">🔄</span> Refresh
           </button>
@@ -61,8 +68,8 @@ import { HistoryStatsComponent } from '../history-stats/history-stats';
       <div class="empty-state animate-fade-in" *ngIf="!loading() && !error() && workflows().length === 0">
         <div class="empty-icon">📜</div>
         <h4>No workflows found</h4>
-        <p *ngIf="searchQuery() || statusFilter()">Try adjusting your search query or status filter.</p>
-        <p *ngIf="!searchQuery() && !statusFilter()">Run a workflow in the "New Workflow" tab to see history here.</p>
+        <p *ngIf="searchQuery() || statusFilter() || dateRangeFilter()">Try adjusting your search query or filters.</p>
+        <p *ngIf="!searchQuery() && !statusFilter() && !dateRangeFilter()">Run a workflow in the "New Workflow" tab to see history here.</p>
       </div>
 
       <!-- Workflows List / Cards -->
@@ -77,6 +84,15 @@ import { HistoryStatsComponent } from '../history-stats/history-stats';
                 <span class="status-icon" *ngIf="wf.status === 'RUNNING'">🔄</span>
                 {{ formatStatus(wf.status) }}
               </span>
+
+              <button
+                class="fav-toggle-btn"
+                [class.is-fav]="wf.favorite"
+                (click)="toggleFavorite($event, wf)"
+                [title]="wf.favorite ? 'Remove Favorite' : 'Mark as Favorite'"
+              >
+                {{ wf.favorite ? '⭐' : '☆' }}
+              </button>
             </div>
             <h3 class="workflow-prompt" (click)="onOpenDetail(wf.id)">{{ wf.prompt }}</h3>
             <div class="workflow-meta">
@@ -93,6 +109,15 @@ import { HistoryStatsComponent } from '../history-stats/history-stats';
             <button class="action-btn run-again-btn" (click)="onRunAgain(wf.prompt)">
               ⚡ Run Again
             </button>
+            <div class="export-dropdown">
+              <button class="action-btn export-btn" (click)="toggleExportMenu($event, wf.id)">
+                📥 Export ▾
+              </button>
+              <div class="export-menu animate-fade-in" *ngIf="activeExportId() === wf.id">
+                <button class="menu-item" (click)="onExportJson($event, wf.id)">📄 Export JSON</button>
+                <button class="menu-item" (click)="onDownloadZip($event, wf.id)">📦 Download ZIP</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -312,6 +337,71 @@ import { HistoryStatsComponent } from '../history-stats/history-stats';
       gap: 0.5rem;
     }
 
+    .badge-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .fav-toggle-btn {
+      background: none;
+      border: none;
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+      transition: transform 0.2s ease;
+      color: #94a3b8;
+    }
+    .fav-toggle-btn:hover {
+      transform: scale(1.2);
+    }
+    .fav-toggle-btn.is-fav {
+      color: #eab308;
+    }
+    .export-dropdown {
+      position: relative;
+      display: inline-block;
+    }
+    .export-btn {
+      background: #f8fafc;
+      color: #475569;
+      border-color: #cbd5e1;
+    }
+    .export-btn:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    .export-menu {
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 0.35rem;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      min-width: 150px;
+      overflow: hidden;
+    }
+    .menu-item {
+      padding: 0.6rem 0.85rem;
+      background: none;
+      border: none;
+      text-align: left;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #334155;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .menu-item:hover {
+      background: #eff6ff;
+      color: #2563eb;
+    }
+
     .status-badge {
       display: inline-flex;
       align-items: center;
@@ -377,6 +467,8 @@ export class HistoryListComponent implements OnInit {
   // Filter params
   public readonly searchQuery = signal('');
   public readonly statusFilter = signal('');
+  public readonly dateRangeFilter = signal('');
+  public readonly activeExportId = signal<string | null>(null);
   public readonly limit = signal(10);
   public readonly offset = signal(0);
   public readonly totalCount = signal(0);
@@ -404,6 +496,7 @@ export class HistoryListComponent implements OnInit {
         offset: this.offset(),
         search: this.searchQuery(),
         status: this.statusFilter(),
+        date_range: this.dateRangeFilter(),
       })
       .subscribe({
         next: (res) => {
@@ -436,6 +529,74 @@ export class HistoryListComponent implements OnInit {
     this.statusFilter.set(val);
     this.offset.set(0);
     this.loadData();
+  }
+
+  onDateRangeFilterChange(event: Event) {
+    const val = (event.target as HTMLSelectElement).value;
+    this.dateRangeFilter.set(val);
+    this.offset.set(0);
+    this.loadData();
+  }
+
+  toggleFavorite(event: Event, wf: WorkflowSummary) {
+    event.stopPropagation();
+    const action$ = wf.favorite
+      ? this.historyService.removeFavorite(wf.id)
+      : this.historyService.markFavorite(wf.id);
+
+    action$.subscribe({
+      next: (updated) => {
+        wf.favorite = updated.favorite;
+        // Refresh stats
+        this.historyService.getStats().subscribe({
+          next: (s) => this.stats.set(s),
+        });
+      },
+      error: (err) => console.error('Failed to toggle favorite:', err),
+    });
+  }
+
+  toggleExportMenu(event: Event, workflowId: string) {
+    event.stopPropagation();
+    if (this.activeExportId() === workflowId) {
+      this.activeExportId.set(null);
+    } else {
+      this.activeExportId.set(workflowId);
+    }
+  }
+
+  onExportJson(event: Event, workflowId: string) {
+    event.stopPropagation();
+    this.activeExportId.set(null);
+    this.historyService.exportJson(workflowId).subscribe({
+      next: (data) => {
+        const jsonStr = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `workflow_${workflowId}.json`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      },
+      error: (err) => alert('Failed to export JSON: ' + (err.message || 'Unknown error')),
+    });
+  }
+
+  onDownloadZip(event: Event, workflowId: string) {
+    event.stopPropagation();
+    this.activeExportId.set(null);
+    this.historyService.downloadZip(workflowId).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `workflow_${workflowId}.zip`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      },
+      error: (err) => alert('Failed to download ZIP: ' + (err.message || 'Unknown error')),
+    });
   }
 
   prevPage() {

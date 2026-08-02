@@ -67,6 +67,7 @@ export interface WorkflowSummary {
   status: WorkflowStatusType;
   total_iterations: number;
   generated_file_count: number;
+  favorite: boolean;
   created_at: string;
   completed_at: string | null;
 }
@@ -119,6 +120,7 @@ export interface WorkflowDetail {
   final_summary: string | null;
   total_iterations: number;
   generated_file_count: number;
+  favorite: boolean;
   created_at: string;
   completed_at: string | null;
   iterations: WorkflowIteration[];
@@ -132,5 +134,6 @@ export interface WorkflowStats {
   failed_workflows: number;
   needs_attention_workflows: number;
   running_workflows: number;
+  favorite_count: number;
   average_iterations: number;
 }

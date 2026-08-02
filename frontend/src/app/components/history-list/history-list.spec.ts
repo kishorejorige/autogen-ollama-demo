@@ -18,6 +18,7 @@ describe('HistoryListComponent', () => {
         status: 'COMPLETE',
         total_iterations: 1,
         generated_file_count: 2,
+        favorite: false,
         created_at: '2026-07-28T00:00:00Z',
         completed_at: '2026-07-28T00:01:00Z',
       },
@@ -27,6 +28,7 @@ describe('HistoryListComponent', () => {
         status: 'FAILED',
         total_iterations: 3,
         generated_file_count: 0,
+        favorite: false,
         created_at: '2026-07-28T01:00:00Z',
         completed_at: null,
       },
@@ -42,6 +44,7 @@ describe('HistoryListComponent', () => {
     failed_workflows: 1,
     needs_attention_workflows: 0,
     running_workflows: 0,
+    favorite_count: 0,
     average_iterations: 2.0,
   };
 
@@ -113,15 +116,56 @@ describe('HistoryListComponent', () => {
     expect(component.workflows().length).toBe(2);
   });
 
-  it('should emit selectWorkflow on detail click', () => {
-    const spy = vi.spyOn(component.selectWorkflow, 'emit');
-    component.onOpenDetail('wf-1');
-    expect(spy).toHaveBeenCalledWith('wf-1');
+  it('should filter by date range', () => {
+    fixture.detectChanges();
+    const event = { target: { value: 'today' } } as unknown as Event;
+    component.onDateRangeFilterChange(event);
+    expect(component.dateRangeFilter()).toBe('today');
+    expect(mockHistoryService.listWorkflows).toHaveBeenCalledWith(
+      expect.objectContaining({ date_range: 'today' })
+    );
   });
 
-  it('should emit runAgain on run again click', () => {
-    const spy = vi.spyOn(component.runAgain, 'emit');
-    component.onRunAgain('Build Python CLI');
-    expect(spy).toHaveBeenCalledWith('Build Python CLI');
+  it('should toggle favorite status on card', () => {
+    mockHistoryService.markFavorite = vi.fn().mockReturnValue(of({ id: 'wf-1', favorite: true }));
+    fixture.detectChanges();
+
+    const mockEvent = { stopPropagation: vi.fn() } as unknown as Event;
+    const wf = { ...dummyWorkflows.items[0], favorite: false };
+
+    component.toggleFavorite(mockEvent, wf);
+    expect(mockEvent.stopPropagation).toHaveBeenCalled();
+    expect(mockHistoryService.markFavorite).toHaveBeenCalledWith('wf-1');
+  });
+
+  it('should handle export JSON success and failure', () => {
+    mockHistoryService.exportJson = vi.fn().mockReturnValue(of({ workflow: {} }));
+    fixture.detectChanges();
+
+    const mockEvent = { stopPropagation: vi.fn() } as unknown as Event;
+    component.onExportJson(mockEvent, 'wf-1');
+    expect(mockHistoryService.exportJson).toHaveBeenCalledWith('wf-1');
+
+    // Error test
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    mockHistoryService.exportJson = vi.fn().mockReturnValue(throwError(() => new Error('Export error')));
+    component.onExportJson(mockEvent, 'wf-1');
+    expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('Export error'));
+  });
+
+  it('should handle ZIP download success and failure', () => {
+    const dummyBlob = new Blob(['zipdata'], { type: 'application/zip' });
+    mockHistoryService.downloadZip = vi.fn().mockReturnValue(of(dummyBlob));
+    fixture.detectChanges();
+
+    const mockEvent = { stopPropagation: vi.fn() } as unknown as Event;
+    component.onDownloadZip(mockEvent, 'wf-1');
+    expect(mockHistoryService.downloadZip).toHaveBeenCalledWith('wf-1');
+
+    // Error test
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    mockHistoryService.downloadZip = vi.fn().mockReturnValue(throwError(() => new Error('ZIP error')));
+    component.onDownloadZip(mockEvent, 'wf-1');
+    expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('ZIP error'));
   });
 });
