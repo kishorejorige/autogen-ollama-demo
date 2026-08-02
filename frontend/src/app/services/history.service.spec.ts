@@ -39,6 +39,7 @@ describe('HistoryService', () => {
           status: 'COMPLETE',
           total_iterations: 1,
           generated_file_count: 1,
+          favorite: false,
           created_at: '2026-07-28T00:00:00Z',
           completed_at: '2026-07-28T00:01:00Z',
         },
@@ -72,6 +73,7 @@ describe('HistoryService', () => {
       final_summary: 'Success',
       total_iterations: 1,
       generated_file_count: 1,
+      favorite: false,
       created_at: '2026-07-28T00:00:00Z',
       completed_at: '2026-07-28T00:01:00Z',
       iterations: [],
@@ -98,13 +100,14 @@ describe('HistoryService', () => {
     req.flush({ status: 'deleted', workflow_id: 'wf-1' });
   });
 
-  it('should get stats', () => {
+  it('should get stats with favorite_count', () => {
     const dummyStats: WorkflowStats = {
       total_workflows: 5,
       completed_workflows: 3,
       failed_workflows: 1,
       needs_attention_workflows: 1,
       running_workflows: 0,
+      favorite_count: 2,
       average_iterations: 1.5,
     };
 
@@ -115,5 +118,49 @@ describe('HistoryService', () => {
     const req = httpMock.expectOne(`${environment.apiUrl}/api/workflows/stats`);
     expect(req.request.method).toBe('GET');
     req.flush(dummyStats);
+  });
+
+  it('should mark workflow as favorite', () => {
+    const dummyDetail: any = { id: 'wf-1', favorite: true };
+    service.markFavorite('wf-1').subscribe((res) => {
+      expect(res.favorite).toBe(true);
+    });
+
+    const req = httpMock.expectOne(`${environment.apiUrl}/api/workflows/wf-1/favorite`);
+    expect(req.request.method).toBe('POST');
+    req.flush(dummyDetail);
+  });
+
+  it('should remove workflow favorite', () => {
+    const dummyDetail: any = { id: 'wf-1', favorite: false };
+    service.removeFavorite('wf-1').subscribe((res) => {
+      expect(res.favorite).toBe(false);
+    });
+
+    const req = httpMock.expectOne(`${environment.apiUrl}/api/workflows/wf-1/favorite`);
+    expect(req.request.method).toBe('DELETE');
+    req.flush(dummyDetail);
+  });
+
+  it('should export workflow JSON', () => {
+    const dummyExport = { workflow: { id: 'wf-1' }, iterations: [] };
+    service.exportJson('wf-1').subscribe((res) => {
+      expect(res).toEqual(dummyExport);
+    });
+
+    const req = httpMock.expectOne(`${environment.apiUrl}/api/workflows/wf-1/export/json`);
+    expect(req.request.method).toBe('GET');
+    req.flush(dummyExport);
+  });
+
+  it('should download workflow ZIP', () => {
+    const dummyBlob = new Blob(['zipdata'], { type: 'application/zip' });
+    service.downloadZip('wf-1').subscribe((res) => {
+      expect(res.size).toBeGreaterThan(0);
+    });
+
+    const req = httpMock.expectOne(`${environment.apiUrl}/api/workflows/wf-1/export/zip`);
+    expect(req.request.method).toBe('GET');
+    req.flush(dummyBlob);
   });
 });

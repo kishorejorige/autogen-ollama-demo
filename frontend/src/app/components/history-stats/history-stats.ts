@@ -39,12 +39,28 @@ import { WorkflowStats } from '../../models/chat.models';
           <span class="stat-value">{{ stats.needs_attention_workflows }}</span>
         </div>
       </div>
+
+      <div class="stat-card favorites">
+        <div class="stat-icon">⭐</div>
+        <div class="stat-details">
+          <span class="stat-label">Favorites</span>
+          <span class="stat-value">{{ stats.favorite_count || 0 }}</span>
+        </div>
+      </div>
+
+      <div class="stat-card avg-iterations">
+        <div class="stat-icon">🔄</div>
+        <div class="stat-details">
+          <span class="stat-label">Avg Iterations</span>
+          <span class="stat-value">{{ stats.average_iterations || 0 }}</span>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 1rem;
       margin-bottom: 1.5rem;
     }
@@ -77,6 +93,8 @@ import { WorkflowStats } from '../../models/chat.models';
     .completed .stat-icon { background: #ecfdf5; color: #059669; }
     .failed .stat-icon { background: #fef2f2; color: #dc2626; }
     .needs-attention .stat-icon { background: #fffbeb; color: #d97706; }
+    .favorites .stat-icon { background: #fef9c3; color: #ca8a04; }
+    .avg-iterations .stat-icon { background: #f3e8ff; color: #9333ea; }
 
     .stat-details {
       display: flex;
