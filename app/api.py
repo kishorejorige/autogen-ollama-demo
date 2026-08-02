@@ -3,7 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -17,6 +17,7 @@ from app.database.schemas import (
     WorkflowStatsSchema,
     WorkflowSummarySchema,
 )
+from app.export_service import ExportService
 from app.runner import run_workflow, run_workflow_stream
 
 # Setup logging
@@ -127,17 +128,55 @@ async def chat_streaming(request: TaskRequest):
 # --- Workflow History Endpoints ---
 
 
+def _format_workflow_detail(wf) -> WorkflowDetailSchema:
+    wf_dict = wf.to_dict()
+    iterations = [it.to_dict() for it in sorted(wf.iterations, key=lambda x: x.iteration_number)]
+    messages = [msg.to_dict() for msg in sorted(wf.messages, key=lambda x: x.sequence_number)]
+    generated_files = [
+        gf.to_dict()
+        for gf in sorted(
+            wf.generated_files,
+            key=lambda x: (not x.is_final, x.created_at or ""),
+        )
+    ]
+    return WorkflowDetailSchema(
+        id=wf_dict["id"],
+        prompt=wf_dict["prompt"],
+        status=wf_dict["status"],
+        final_summary=wf_dict["final_summary"],
+        total_iterations=wf_dict["total_iterations"],
+        generated_file_count=wf_dict["generated_file_count"],
+        favorite=wf_dict["favorite"],
+        created_at=wf_dict["created_at"],
+        completed_at=wf_dict["completed_at"],
+        iterations=iterations,
+        messages=messages,
+        generated_files=generated_files,
+    )
+
+
 @app.get("/api/workflows", response_model=WorkflowListSchema)
 async def list_workflows(
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     search: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    date_range: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
+    if date_range is not None and date_range.strip():
+        norm_range = date_range.strip().lower()
+        if norm_range not in ("today", "7d", "30d"):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid date_range parameter. Supported values: today, 7d, 30d",
+            )
+    else:
+        norm_range = None
+
     repo = WorkflowRepository(db)
     items, total = repo.list_workflows(
-        limit=limit, offset=offset, search=search, status=status
+        limit=limit, offset=offset, search=search, status=status, date_range=norm_range
     )
     summaries = [WorkflowSummarySchema(**wf.to_dict()) for wf in items]
     return WorkflowListSchema(
@@ -162,36 +201,54 @@ async def get_workflow_detail(workflow_id: str, db: Session = Depends(get_db)):
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    wf_dict = wf.to_dict()
+    return _format_workflow_detail(wf)
 
-    # Iterations sorted by iteration_number
-    iterations = [it.to_dict() for it in sorted(wf.iterations, key=lambda x: x.iteration_number)]
 
-    # Messages sorted by sequence_number
-    messages = [msg.to_dict() for msg in sorted(wf.messages, key=lambda x: x.sequence_number)]
+@app.get("/api/workflows/{workflow_id}/export/json")
+async def export_workflow_json(workflow_id: str, db: Session = Depends(get_db)):
+    repo = WorkflowRepository(db)
+    wf = repo.get_workflow(workflow_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
 
-    # Generated files sorted with final files first, then created_at
-    generated_files = [
-        gf.to_dict()
-        for gf in sorted(
-            wf.generated_files,
-            key=lambda x: (not x.is_final, x.created_at or ""),
-        )
-    ]
+    return ExportService.export_json(wf)
 
-    return WorkflowDetailSchema(
-        id=wf_dict["id"],
-        prompt=wf_dict["prompt"],
-        status=wf_dict["status"],
-        final_summary=wf_dict["final_summary"],
-        total_iterations=wf_dict["total_iterations"],
-        generated_file_count=wf_dict["generated_file_count"],
-        created_at=wf_dict["created_at"],
-        completed_at=wf_dict["completed_at"],
-        iterations=iterations,
-        messages=messages,
-        generated_files=generated_files,
+
+@app.get("/api/workflows/{workflow_id}/export/zip")
+async def export_workflow_zip(workflow_id: str, db: Session = Depends(get_db)):
+    repo = WorkflowRepository(db)
+    wf = repo.get_workflow(workflow_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    zip_bytes = ExportService.export_zip(wf)
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename=workflow_{workflow_id}.zip"
+        },
     )
+
+
+@app.post("/api/workflows/{workflow_id}/favorite", response_model=WorkflowDetailSchema)
+async def mark_workflow_favorite(workflow_id: str, db: Session = Depends(get_db)):
+    repo = WorkflowRepository(db)
+    wf = repo.mark_favorite(workflow_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    return _format_workflow_detail(wf)
+
+
+@app.delete("/api/workflows/{workflow_id}/favorite", response_model=WorkflowDetailSchema)
+async def remove_workflow_favorite(workflow_id: str, db: Session = Depends(get_db)):
+    repo = WorkflowRepository(db)
+    wf = repo.remove_favorite(workflow_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    return _format_workflow_detail(wf)
 
 
 @app.delete("/api/workflows/{workflow_id}")

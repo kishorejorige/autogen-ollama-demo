@@ -149,3 +149,109 @@ def test_delete_workflow_endpoint(api_client, test_db_session):
     # Confirm 404 after deletion
     res_get = api_client.get(f"/api/workflows/{wf_id}")
     assert res_get.status_code == 404
+
+
+def test_favorite_toggle_endpoints(api_client, test_db_session):
+    with test_db_session() as db:
+        repo = WorkflowRepository(db)
+        w = repo.create_workflow("Fav Task")
+        wf_id = w.id
+
+    # Mark favorite
+    res = api_client.post(f"/api/workflows/{wf_id}/favorite")
+    assert res.status_code == 200
+    assert res.json()["favorite"] is True
+
+    # Remove favorite
+    res = api_client.delete(f"/api/workflows/{wf_id}/favorite")
+    assert res.status_code == 200
+    assert res.json()["favorite"] is False
+
+    # 404 for non-existent
+    res_post_404 = api_client.post("/api/workflows/non-existent/favorite")
+    assert res_post_404.status_code == 404
+
+    res_del_404 = api_client.delete("/api/workflows/non-existent/favorite")
+    assert res_del_404.status_code == 404
+
+
+def test_date_range_filtering_and_validation(api_client, test_db_session):
+    with test_db_session() as db:
+        repo = WorkflowRepository(db)
+        repo.create_workflow("Today Task")
+
+    # Valid ranges
+    for rng in ["today", "7d", "30d"]:
+        res = api_client.get(f"/api/workflows?date_range={rng}")
+        assert res.status_code == 200
+
+    # Invalid range -> 400
+    res_invalid = api_client.get("/api/workflows?date_range=invalid_range")
+    assert res_invalid.status_code == 400
+    assert "Invalid date_range parameter" in res_invalid.json()["detail"]
+
+
+def test_export_json_endpoint(api_client, test_db_session):
+    with test_db_session() as db:
+        repo = WorkflowRepository(db)
+        w = repo.create_workflow("Export JSON Task")
+        it = repo.save_iteration(w.id, iteration_number=1)
+        repo.save_message(w.id, "python_developer", "TextMessage", "Code content", sequence_number=1, iteration_id=it.id)
+        repo.save_generated_file(w.id, "main.py", "print('hello')", is_final=True, iteration_id=it.id)
+        wf_id = w.id
+
+    res = api_client.get(f"/api/workflows/{wf_id}/export/json")
+    assert res.status_code == 200
+    data = res.json()
+    assert "workflow" in data
+    assert "iterations" in data
+    assert "messages" in data
+    assert "generated_files" in data
+    assert data["workflow"]["id"] == wf_id
+    assert len(data["generated_files"]) == 1
+
+    # 404
+    res_404 = api_client.get("/api/workflows/non-existent/export/json")
+    assert res_404.status_code == 404
+
+
+def test_export_zip_endpoint(api_client, test_db_session):
+    import io
+    import zipfile
+
+    with test_db_session() as db:
+        repo = WorkflowRepository(db)
+        w = repo.create_workflow("Export ZIP Task")
+        repo.save_generated_file(w.id, "app.py", "print('zip test')", is_final=True)
+        wf_id = w.id
+
+    res = api_client.get(f"/api/workflows/{wf_id}/export/zip")
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "application/zip"
+    assert f"filename=workflow_{wf_id}.zip" in res.headers["content-disposition"]
+
+    # Verify zip content
+    buf = io.BytesIO(res.content)
+    with zipfile.ZipFile(buf, "r") as zf:
+        namelist = zf.namelist()
+        assert "app.py" in namelist
+        assert "README.md" in namelist
+        assert zf.read("app.py").decode("utf-8") == "print('zip test')"
+
+    # 404
+    res_404 = api_client.get("/api/workflows/non-existent/export/zip")
+    assert res_404.status_code == 404
+
+
+def test_updated_stats_with_favorites(api_client, test_db_session):
+    with test_db_session() as db:
+        repo = WorkflowRepository(db)
+        w = repo.create_workflow("Fav Stat Task")
+        repo.mark_favorite(w.id)
+
+    res = api_client.get("/api/workflows/stats")
+    assert res.status_code == 200
+    data = res.json()
+    assert "favorite_count" in data
+    assert data["favorite_count"] == 1
+    assert "average_iterations" in data

@@ -41,6 +41,7 @@ class WorkflowSummarySchema(BaseModel):
     status: str
     total_iterations: int
     generated_file_count: int
+    favorite: bool = False
     created_at: str
     completed_at: str | None = None
 
@@ -59,6 +60,7 @@ class WorkflowDetailSchema(BaseModel):
     final_summary: str | None = None
     total_iterations: int
     generated_file_count: int
+    favorite: bool = False
     created_at: str
     completed_at: str | None = None
     iterations: list[WorkflowIterationSchema] = Field(default_factory=list)
@@ -72,4 +74,5 @@ class WorkflowStatsSchema(BaseModel):
     failed_workflows: int
     needs_attention_workflows: int
     running_workflows: int
+    favorite_count: int = 0
     average_iterations: float

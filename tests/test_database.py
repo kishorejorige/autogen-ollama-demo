@@ -225,3 +225,43 @@ def test_persistence_service_atomic_transactions(tmp_path):
         assert len(wf.messages) == 1
         assert len(wf.generated_files) == 1
         assert wf.generated_files[0].is_final is True
+
+
+def test_database_migration_existing_schema_without_favorite(tmp_path):
+    from app.database.connection import init_db
+    db_file = tmp_path / "legacy.db"
+    db_url = f"sqlite:///{db_file}"
+    engine = create_engine(db_url, connect_args={"check_same_thread": False})
+
+    # Create legacy table without favorite column using raw SQL
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE workflows (
+                id VARCHAR(36) NOT NULL PRIMARY KEY,
+                prompt TEXT NOT NULL,
+                status VARCHAR(30) NOT NULL,
+                final_summary TEXT,
+                total_iterations INTEGER DEFAULT 0,
+                created_at DATETIME,
+                completed_at DATETIME
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO workflows (id, prompt, status, total_iterations)
+            VALUES ('legacy-id-123', 'Legacy Workflow Prompt', 'COMPLETE', 2)
+        """))
+        conn.commit()
+
+    # Call init_db to run migration
+    init_db(engine)
+
+    # Verify favorite column was added and existing data remains intact
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    with TestingSessionLocal() as db:
+        repo = WorkflowRepository(db)
+        wf = repo.get_workflow("legacy-id-123")
+        assert wf is not None
+        assert wf.prompt == "Legacy Workflow Prompt"
+        assert wf.status == "COMPLETE"
+        assert wf.total_iterations == 2
+        assert wf.favorite is False
