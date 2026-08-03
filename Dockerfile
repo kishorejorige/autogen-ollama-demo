@@ -24,8 +24,9 @@ COPY config/ ./config
 COPY agents/ ./agents
 COPY main.py ./
 
-# Create a non-root user and set permissions
-RUN useradd -u 10001 -m appuser && \
+# Create data directory, non-root user, and set permissions
+RUN mkdir -p /app/data && \
+    useradd -u 10001 -m appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
