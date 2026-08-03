@@ -114,6 +114,7 @@ class WorkflowPersistenceService:
         status: str = WorkflowStatus.COMPLETE,
         final_summary: str | None = None,
         total_iterations: int = 1,
+        quality_gate_data: str | None = None,
     ) -> None:
         with self.session_factory() as db:
             repo = WorkflowRepository(db)
@@ -122,6 +123,7 @@ class WorkflowPersistenceService:
                 final_summary=final_summary,
                 total_iterations=total_iterations,
                 status=status,
+                quality_gate_data=quality_gate_data,
             )
 
     def mark_failed(

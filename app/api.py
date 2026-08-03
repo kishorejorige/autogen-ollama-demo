@@ -129,7 +129,10 @@ async def chat_streaming(request: TaskRequest):
 
 
 def _format_workflow_detail(wf) -> WorkflowDetailSchema:
+    from app.quality_gate import deserialize_quality_gate
+
     wf_dict = wf.to_dict()
+    qg = deserialize_quality_gate(wf.quality_gate_data)
     iterations = [it.to_dict() for it in sorted(wf.iterations, key=lambda x: x.iteration_number)]
     messages = [msg.to_dict() for msg in sorted(wf.messages, key=lambda x: x.sequence_number)]
     generated_files = [
@@ -143,6 +146,8 @@ def _format_workflow_detail(wf) -> WorkflowDetailSchema:
         id=wf_dict["id"],
         prompt=wf_dict["prompt"],
         status=wf_dict["status"],
+        quality_gate_status=qg.overall_status.value,
+        quality_gate_data=qg.model_dump(),
         final_summary=wf_dict["final_summary"],
         total_iterations=wf_dict["total_iterations"],
         generated_file_count=wf_dict["generated_file_count"],

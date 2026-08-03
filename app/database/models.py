@@ -36,6 +36,7 @@ class Workflow(Base):
     final_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     total_iterations: Mapped[int] = mapped_column(Integer, default=0)
     favorite: Mapped[bool] = mapped_column(Boolean, default=False)
+    quality_gate_data: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -63,10 +64,14 @@ class Workflow(Base):
     )
 
     def to_dict(self) -> dict[str, Any]:
+        from app.quality_gate import deserialize_quality_gate
+
+        qg = deserialize_quality_gate(self.quality_gate_data)
         return {
             "id": self.id,
             "prompt": self.prompt,
             "status": self.status,
+            "quality_gate_status": qg.overall_status.value,
             "final_summary": self.final_summary,
             "total_iterations": self.total_iterations,
             "favorite": bool(self.favorite) if self.favorite is not None else False,
