@@ -33,7 +33,7 @@ class MockModelClient(ChatCompletionClient):
         cancellation_token=None,
     ):
         return CreateResult(
-            content="Mock agent output. Review status: APPROVED\nTest status: PASS",
+            content="def main(): pass\n# Review status: APPROVED\n# Test status: PASS",
             usage=RequestUsage(prompt_tokens=10, completion_tokens=20),
             finish_reason="stop",
             cached=False,
@@ -92,12 +92,13 @@ def test_agent_factories_and_names(mock_group_chat_class):
     args, kwargs = mock_group_chat_class.call_args
     participants = kwargs.get("participants") or args[0]
 
-    assert len(participants) == 5
+    assert len(participants) == 6
 
     names = [agent.name for agent in participants]
     assert names == [
         "manager_agent",
         "python_developer",
+        "requirements_validator",
         "code_reviewer",
         "tester_agent",
         "documentation_agent",
@@ -106,16 +107,17 @@ def test_agent_factories_and_names(mock_group_chat_class):
     for agent in participants:
         assert isinstance(agent, AssistantAgent)
 
-    assert kwargs.get("max_turns") == 5
+    assert kwargs.get("max_turns") == 6
 
 
 @patch("app.runner.create_documentation_agent")
 @patch("app.runner.create_tester_agent")
 @patch("app.runner.create_code_reviewer_agent")
+@patch("app.runner.create_requirements_validator_agent")
 @patch("app.runner.create_python_developer_agent")
 @patch("app.runner.create_manager_agent")
 def test_agent_factories_called_in_order(
-    mock_manager, mock_developer, mock_reviewer, mock_tester, mock_documenter
+    mock_manager, mock_developer, mock_validator, mock_reviewer, mock_tester, mock_documenter
 ):
     call_order = []
 
@@ -125,6 +127,10 @@ def test_agent_factories_called_in_order(
     )[1]
     mock_developer.side_effect = lambda *args, **kwargs: (
         call_order.append("developer"),
+        MagicMock(),
+    )[1]
+    mock_validator.side_effect = lambda *args, **kwargs: (
+        call_order.append("validator"),
         MagicMock(),
     )[1]
     mock_reviewer.side_effect = lambda *args, **kwargs: (
@@ -143,7 +149,7 @@ def test_agent_factories_called_in_order(
     client = MockModelClient()
     create_team(client)
 
-    assert call_order == ["manager", "developer", "reviewer", "tester", "documenter"]
+    assert call_order == ["manager", "developer", "validator", "reviewer", "tester", "documenter"]
 
 
 @patch("app.runner.create_team")
@@ -329,7 +335,7 @@ class ScenarioModelClient(MockModelClient):
         system_content = messages[0].content.lower() if messages else ""
 
         is_reviewer = "senior python code reviewer" in system_content
-        is_tester = "senior qa and testing engineer" in system_content
+        is_tester = "senior qa and testing engineer" in system_content or "senior qa & testing engineer" in system_content
         is_developer = "senior python developer" in system_content
         is_manager = "manager agent" in system_content
         is_documenter = "technical writer" in system_content

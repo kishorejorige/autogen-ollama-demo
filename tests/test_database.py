@@ -265,3 +265,16 @@ def test_database_migration_existing_schema_without_favorite(tmp_path):
         assert wf.status == "COMPLETE"
         assert wf.total_iterations == 2
         assert wf.favorite is False
+
+
+def test_ensure_db_dir_creates_directory_and_sets_permissions(tmp_path):
+    from app.database.connection import ensure_db_dir
+    nested_dir = tmp_path / "sub_folder" / "nested"
+    db_file = nested_dir / "test_permissions.db"
+    db_url = f"sqlite:///{db_file}"
+
+    assert not nested_dir.exists()
+    ensure_db_dir(db_url)
+
+    assert nested_dir.exists()
+    assert nested_dir.is_dir()

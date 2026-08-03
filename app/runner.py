@@ -18,8 +18,17 @@ from agents.documenter import create_documentation_agent
 from agents.manager import create_manager_agent
 from agents.reviewer import create_code_reviewer_agent
 from agents.tester import create_tester_agent
+from agents.validator import create_requirements_validator_agent
 from app.database.models import WorkflowStatus
 from app.database.service import WorkflowPersistenceService
+from app.project_validator import RunReadiness
+from app.quality_gate import (
+    QualityGateResult,
+    QualityGateStatus,
+    evaluate_quality_gate,
+    extract_requirements,
+    serialize_quality_gate,
+)
 from config.settings import OLLAMA_BASE_URL, OLLAMA_MODEL
 
 logger = logging.getLogger("runner")
@@ -28,6 +37,7 @@ logger = logging.getLogger("runner")
 def create_team(model_client: OllamaChatCompletionClient) -> RoundRobinGroupChat:
     manager_agent = create_manager_agent(model_client)
     developer_agent = create_python_developer_agent(model_client)
+    validator_agent = create_requirements_validator_agent(model_client)
     reviewer_agent = create_code_reviewer_agent(model_client)
     tester_agent = create_tester_agent(model_client)
     documenter_agent = create_documentation_agent(model_client)
@@ -35,12 +45,13 @@ def create_team(model_client: OllamaChatCompletionClient) -> RoundRobinGroupChat
         participants=[
             manager_agent,
             developer_agent,
+            validator_agent,
             reviewer_agent,
             tester_agent,
             documenter_agent,
         ],
         termination_condition=SourceMatchTermination(sources=["documentation_agent"]),
-        max_turns=5,
+        max_turns=6,
     )
 
 
@@ -121,7 +132,7 @@ def extract_generated_files(messages: list[dict], iteration: int, is_final: bool
             continue
         msg_iteration = msg.get("metadata", {}).get("iteration", iteration)
         content = msg.get("content", "")
-        pattern = r"```(?:python|py)?\s*(.*?)\s*```"
+        pattern = r"```(?:[a-zA-Z0-9_\-\+]+)?\s*(.*?)\s*```"
         matches = re.finditer(pattern, content, re.DOTALL)
         for match in matches:
             code = match.group(1)
@@ -129,9 +140,9 @@ def extract_generated_files(messages: list[dict], iteration: int, is_final: bool
             filename = "solution.py"
             for line in lines[:3]:
                 line = line.strip()
-                if line.startswith("#"):
-                    comment_content = line[1:].strip()
-                    if re.match(r"^[\w\/\.\-]+\.\w+$", comment_content):
+                if line.startswith(("#", "//")):
+                    comment_content = line.strip("# /").strip()
+                    if re.match(r"^[\w\/\.\-]+\.\w+$", comment_content) or comment_content.lower() in ("dockerfile", "docker-compose.yml"):
                         filename = comment_content
                         break
             files_map[filename] = {
@@ -164,15 +175,17 @@ async def _run_loop_orchestration(
     participants = getattr(team, "_participants", None) or getattr(team, "participants", [])
     manager = participants[0]
     developer = participants[1]
-    reviewer = participants[2]
-    tester = participants[3]
-    documenter = participants[4]
+    validator = participants[2]
+    reviewer = participants[3]
+    tester = participants[4]
+    documenter = participants[5]
 
     service = persistence_service or WorkflowPersistenceService()
 
     workflow_id = str(uuid.uuid4())
     started_at = datetime.now(UTC).isoformat()
     sequence_number = 0
+    extracted_reqs = extract_requirements(task)
 
     state = {
         "workflow_id": workflow_id,
@@ -180,14 +193,19 @@ async def _run_loop_orchestration(
         "current_iteration": 1,
         "max_iterations": 3,
         "status": "RUNNING",
+        "quality_gate_status": "UNKNOWN",
         "reviewer_status": None,
         "tester_status": None,
+        "extracted_requirements": [r.model_dump() for r in extracted_reqs],
+        "quality_gate_result": QualityGateResult().model_dump(),
+        "framework_mismatches": [],
+        "unsupported_claims": [],
         "messages": [],
         "generated_files": [],
         "iteration_history": [],
         "started_at": started_at,
         "completed_at": None,
-        "error": None
+        "error": None,
     }
 
     def make_event(event_type: str, message_dict: dict | None = None) -> dict:
@@ -204,13 +222,15 @@ async def _run_loop_orchestration(
                 "type": "SystemEvent",
                 "content": f"Event: {event_type}",
                 "created_at": datetime.now(UTC).isoformat(),
-                "metadata": {}
+                "metadata": {},
             })
         return evt
 
     try:
         service.start_workflow(prompt=task, workflow_id=workflow_id)
         yield make_event("workflow_started")
+        yield make_event("requirements_extracted", {"requirements": [r.model_dump() for r in extracted_reqs]})
+
         conversation_history = []
 
         # Run Manager
@@ -236,8 +256,10 @@ async def _run_loop_orchestration(
         # Iteration Loop (up to 3 iterations)
         success = False
         dev_messages = []
+        validator_messages = []
         reviewer_messages = []
         tester_messages = []
+        final_qg_result = None
 
         for iteration in range(1, 4):
             state["current_iteration"] = iteration
@@ -253,6 +275,7 @@ async def _run_loop_orchestration(
                 dev_task = conversation_history
             else:
                 latest_solution = dev_messages[-1].content if dev_messages else ""
+                val_feedback = validator_messages[-1].content if validator_messages else ""
                 reviewer_feedback = reviewer_messages[-1].content if reviewer_messages else ""
                 tester_feedback = tester_messages[-1].content if tester_messages else ""
 
@@ -263,11 +286,14 @@ async def _run_loop_orchestration(
                 if not required_fixes:
                     required_fixes = tester_feedback
 
+                req_names = ", ".join([r.name for r in extracted_reqs])
                 dev_task = (
-                    f"You are repairing your previous solution. Please address the feedback below.\n\n"
-                    f"Original Task: {task}\n\n"
-                    f"Latest Solution:\n{latest_solution}\n\n"
-                    f"Reviewer Feedback:\n{reviewer_feedback}\n\n"
+                    f"You are repairing your solution. Please address the feedback below.\n\n"
+                    f"Original Task: {task}\n"
+                    f"Extracted Requirements: {req_names}\n\n"
+                    f"Latest Developer Output:\n{latest_solution}\n\n"
+                    f"Requirements Validator Findings:\n{val_feedback}\n\n"
+                    f"Code Reviewer Feedback:\n{reviewer_feedback}\n\n"
                     f"Tester Feedback:\n{tester_feedback}\n\n"
                     f"Required Fixes:\n{required_fixes}\n\n"
                     f"Iteration Number: {iteration}\n\n"
@@ -294,6 +320,32 @@ async def _run_loop_orchestration(
                     yield make_event("agent_message", serialized)
 
             yield make_event("agent_completed")
+
+            # --- Requirements Validator Turn ---
+            state["current_agent"] = validator.name
+            yield make_event("agent_started")
+            yield make_event("requirements_validation_started")
+
+            validator_messages_this_turn = []
+            input_ids = {msg.id for msg in conversation_history}
+            async for msg in validator.run_stream(task=conversation_history):
+                if isinstance(msg, TaskResult):
+                    continue
+                if msg.id not in input_ids and msg.source == validator.name:
+                    validator_messages_this_turn.append(msg)
+                    validator_messages.append(msg)
+                    conversation_history.append(msg)
+                    serialized = serialize_message(msg, iteration=iteration)
+                    state["messages"].append(serialized)
+                    sequence_number += 1
+                    service.record_agent_message(workflow_id, serialized, sequence_number, iteration=iteration)
+                    yield make_event("agent_message", serialized)
+
+            yield make_event("agent_completed")
+
+            val_content = validator_messages_this_turn[-1].content if validator_messages_this_turn else ""
+            val_json = parse_json_block(val_content)
+            yield make_event("requirements_validation_completed", {"validation_result": val_json or {}})
 
             # --- Reviewer Turn ---
             state["current_agent"] = reviewer.name
@@ -324,7 +376,7 @@ async def _run_loop_orchestration(
                 "type": "ReviewResult",
                 "content": f"Reviewer status: {rev_status}",
                 "created_at": datetime.now(UTC).isoformat(),
-                "metadata": {"status": rev_status, "iteration": iteration}
+                "metadata": {"status": rev_status, "iteration": iteration},
             })
 
             # --- Tester Turn ---
@@ -356,8 +408,47 @@ async def _run_loop_orchestration(
                 "type": "TestResult",
                 "content": f"Tester status: {test_status}",
                 "created_at": datetime.now(UTC).isoformat(),
-                "metadata": {"status": test_status, "iteration": iteration}
+                "metadata": {"status": test_status, "iteration": iteration},
             })
+
+            # Evaluate Quality Gate
+            yield make_event("project_validation_started")
+            dev_text_content = "\n".join([m.content for m in dev_messages if hasattr(m, "content")])
+            all_text_content = "\n".join([m.content for m in conversation_history if hasattr(m, "content")])
+            qg_result = evaluate_quality_gate(
+                prompt=task,
+                all_messages_content=all_text_content,
+                dev_content=dev_text_content,
+                tester_status=test_status,
+                validator_json=val_json,
+                generated_files=state["generated_files"],
+            )
+            final_qg_result = qg_result
+
+            yield make_event("project_validation_completed", {
+                "project_validation": qg_result.project_validation.model_dump(),
+                "run_readiness": qg_result.run_readiness.value,
+            })
+            yield make_event("run_readiness_computed", {"run_readiness": qg_result.run_readiness.value})
+
+            pv = qg_result.project_validation
+            if pv.unresolved_imports:
+                yield make_event("unresolved_import_detected", {"unresolved_imports": pv.unresolved_imports})
+            if pv.undefined_symbols:
+                yield make_event("undefined_symbol_detected", {"undefined_symbols": pv.undefined_symbols})
+            if pv.syntax_errors:
+                yield make_event("syntax_error_detected", {"syntax_errors": pv.syntax_errors})
+            if pv.placeholder_files:
+                yield make_event("placeholder_artifact_detected", {"placeholder_files": pv.placeholder_files})
+            if pv.module_conflicts:
+                yield make_event("module_shadowing_detected", {"module_conflicts": pv.module_conflicts})
+            if pv.missing_dependency_files:
+                yield make_event("missing_dependency_detected", {"missing_dependency_files": pv.missing_dependency_files})
+
+            state["quality_gate_status"] = qg_result.overall_status.value
+            state["quality_gate_result"] = qg_result.model_dump()
+            state["framework_mismatches"] = qg_result.framework_mismatches
+            state["unsupported_claims"] = qg_result.unsupported_claims
 
             # Record iteration history
             dev_resp = dev_messages_this_turn[-1].content if dev_messages_this_turn else ""
@@ -366,11 +457,12 @@ async def _run_loop_orchestration(
 
             state["iteration_history"].append({
                 "iteration": iteration,
+                "validator_status": qg_result.overall_status.value,
                 "reviewer_status": rev_status,
                 "tester_status": test_status,
                 "developer_response": dev_resp,
                 "reviewer_response": rev_resp,
-                "tester_response": tst_resp
+                "tester_response": tst_resp,
             })
 
             service.record_iteration(
@@ -380,16 +472,27 @@ async def _run_loop_orchestration(
                 test_status=test_status,
                 developer_output=dev_resp,
                 reviewer_feedback=rev_resp,
-                tester_feedback=tst_resp
+                tester_feedback=tst_resp,
             )
 
-            # Check loop termination conditions
-            if rev_status == "APPROVED" and test_status == "PASS":
+            # Check overall pass condition
+            if (
+                qg_result.overall_status == QualityGateStatus.PASS
+                and rev_status == "APPROVED"
+                and test_status == "PASS"
+                and qg_result.run_readiness != RunReadiness.NOT_RUNNABLE
+            ):
                 success = True
                 yield make_event("iteration_passed")
                 break
             else:
+                if qg_result.overall_status != QualityGateStatus.PASS:
+                    yield make_event("compliance_failed", {"issues": qg_result.missing_deliverables + qg_result.framework_mismatches})
+                if qg_result.unsupported_claims:
+                    yield make_event("unsupported_claim_detected", {"unsupported_claims": qg_result.unsupported_claims})
                 yield make_event("iteration_failed")
+
+        serialized_qg = serialize_quality_gate(final_qg_result)
 
         if success:
             # --- Documenter Turn ---
@@ -412,37 +515,72 @@ async def _run_loop_orchestration(
             yield make_event("agent_completed")
 
             state["status"] = "COMPLETE"
+            state["quality_gate_status"] = QualityGateStatus.PASS.value
             state["completed_at"] = datetime.now(UTC).isoformat()
             state["generated_files"] = extract_generated_files(state["messages"], iteration=state["current_iteration"], is_final=True)
 
-            summary = "Workflow finished successfully. Review APPROVED and tests PASSED."
+            summary = "Workflow finished successfully. Quality Gate PASSED, Review APPROVED, and Tests PASSED."
             service.record_generated_files(workflow_id, state["generated_files"], iteration=state["current_iteration"], is_final=True)
-            service.finish_workflow(workflow_id, status=WorkflowStatus.COMPLETE, final_summary=summary, total_iterations=state["current_iteration"])
+            service.finish_workflow(
+                workflow_id,
+                status=WorkflowStatus.COMPLETE,
+                final_summary=summary,
+                total_iterations=state["current_iteration"],
+                quality_gate_data=serialized_qg,
+            )
 
+            yield make_event("quality_gate_passed", {"quality_gate": final_qg_result.model_dump() if final_qg_result else QualityGateResult().model_dump()})
             yield make_event("workflow_completed", {
                 "id": "result",
                 "source": "system",
                 "type": "TaskResult",
                 "content": summary,
                 "created_at": datetime.now(UTC).isoformat(),
-                "metadata": {"stop_reason": "APPROVED_AND_PASSED", "iteration": state["current_iteration"]}
+                "metadata": {"stop_reason": "APPROVED_AND_PASSED", "iteration": state["current_iteration"]},
             })
         else:
+            # Run Documenter even on NEEDS_ATTENTION so documentation agent acknowledges state
+            state["current_agent"] = documenter.name
+            yield make_event("agent_started")
+            doc_messages = []
+            input_ids = {msg.id for msg in conversation_history}
+            async for msg in documenter.run_stream(task=conversation_history):
+                if isinstance(msg, TaskResult):
+                    continue
+                if msg.id not in input_ids and msg.source == documenter.name:
+                    doc_messages.append(msg)
+                    conversation_history.append(msg)
+                    serialized = serialize_message(msg, iteration=state["current_iteration"])
+                    state["messages"].append(serialized)
+                    sequence_number += 1
+                    service.record_agent_message(workflow_id, serialized, sequence_number, iteration=state["current_iteration"])
+                    yield make_event("agent_message", serialized)
+
+            yield make_event("agent_completed")
+
             state["status"] = "NEEDS_ATTENTION"
+            state["quality_gate_status"] = QualityGateStatus.FAIL.value
             state["completed_at"] = datetime.now(UTC).isoformat()
             state["generated_files"] = extract_generated_files(state["messages"], iteration=state["current_iteration"], is_final=True)
 
-            summary = "Workflow finished with NEEDS_ATTENTION. Maximum iterations reached without approval."
+            summary = "Workflow finished with NEEDS_ATTENTION. Quality Gate or Review failed after maximum iterations."
             service.record_generated_files(workflow_id, state["generated_files"], iteration=state["current_iteration"], is_final=True)
-            service.finish_workflow(workflow_id, status=WorkflowStatus.NEEDS_ATTENTION, final_summary=summary, total_iterations=state["current_iteration"])
+            service.finish_workflow(
+                workflow_id,
+                status=WorkflowStatus.NEEDS_ATTENTION,
+                final_summary=summary,
+                total_iterations=state["current_iteration"],
+                quality_gate_data=serialized_qg,
+            )
 
+            yield make_event("quality_gate_failed", {"quality_gate": final_qg_result.model_dump() if final_qg_result else QualityGateResult().model_dump()})
             yield make_event("workflow_needs_attention", {
                 "id": "result",
                 "source": "system",
                 "type": "TaskResult",
                 "content": summary,
                 "created_at": datetime.now(UTC).isoformat(),
-                "metadata": {"stop_reason": "MAX_ITERATIONS_REACHED", "iteration": state["current_iteration"]}
+                "metadata": {"stop_reason": "MAX_ITERATIONS_REACHED", "iteration": state["current_iteration"]},
             })
 
     except Exception as e:

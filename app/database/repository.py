@@ -244,6 +244,7 @@ class WorkflowRepository:
         final_summary: str | None = None,
         total_iterations: int = 1,
         status: str = WorkflowStatus.COMPLETE,
+        quality_gate_data: str | None = None,
     ) -> Workflow | None:
         workflow = self.get_workflow(workflow_id)
         if not workflow:
@@ -252,6 +253,8 @@ class WorkflowRepository:
         workflow.status = status
         workflow.final_summary = final_summary
         workflow.total_iterations = total_iterations
+        if quality_gate_data is not None:
+            workflow.quality_gate_data = quality_gate_data
         workflow.completed_at = datetime.now(UTC)
         self.db.commit()
         self.db.refresh(workflow)

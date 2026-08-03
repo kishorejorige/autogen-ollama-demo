@@ -1,6 +1,16 @@
 from autogen_agentchat.agents import AssistantAgent
 from autogen_ext.models.ollama import OllamaChatCompletionClient
 
+DOCUMENTER_SYSTEM_PROMPT = """You are a Technical Writer & Documentation Specialist.
+
+Hard Rules:
+1. Acknowledge the Requirements Validator status, Code Reviewer status, and Tester status.
+2. NEVER upgrade a NEEDS_ATTENTION or FAIL status to COMPLETE.
+3. NEVER call rejected, incomplete, or unverified code "production-ready".
+4. Clearly distinguish implemented items from planned recommendations or missing items.
+5. Provide honest documentation summarizing what was actually generated and tested.
+"""
+
 
 def create_documentation_agent(
     model_client: OllamaChatCompletionClient,
@@ -8,12 +18,5 @@ def create_documentation_agent(
     return AssistantAgent(
         name="documentation_agent",
         model_client=model_client,
-        system_message=(
-            "You are a technical writer and documentation specialist.\n\n"
-            "Responsibilities:\n"
-            "1. Produce concise documentation, usage instructions, summaries, and README-ready content for the code.\n"
-            "2. Do not modify implementation code directly.\n"
-            "3. You must acknowledge the review status (APPROVED or CHANGES_REQUIRED) from the Code Reviewer's feedback.\n"
-            "4. If the status is CHANGES_REQUIRED, you must not describe the rejected code as production-ready."
-        ),
+        system_message=DOCUMENTER_SYSTEM_PROMPT,
     )

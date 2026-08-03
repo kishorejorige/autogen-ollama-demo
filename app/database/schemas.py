@@ -39,6 +39,7 @@ class WorkflowSummarySchema(BaseModel):
     id: str
     prompt: str
     status: str
+    quality_gate_status: str = "UNKNOWN"
     total_iterations: int
     generated_file_count: int
     favorite: bool = False
@@ -57,6 +58,8 @@ class WorkflowDetailSchema(BaseModel):
     id: str
     prompt: str
     status: str
+    quality_gate_status: str = "UNKNOWN"
+    quality_gate_data: dict | None = None
     final_summary: str | None = None
     total_iterations: int
     generated_file_count: int

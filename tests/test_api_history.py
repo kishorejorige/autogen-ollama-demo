@@ -234,9 +234,10 @@ def test_export_zip_endpoint(api_client, test_db_session):
     buf = io.BytesIO(res.content)
     with zipfile.ZipFile(buf, "r") as zf:
         namelist = zf.namelist()
-        assert "app.py" in namelist
+        assert any("app.py" in f for f in namelist)
         assert "README.md" in namelist
-        assert zf.read("app.py").decode("utf-8") == "print('zip test')"
+        app_file = next(f for f in namelist if "app.py" in f)
+        assert zf.read(app_file).decode("utf-8") == "print('zip test')"
 
     # 404
     res_404 = api_client.get("/api/workflows/non-existent/export/zip")

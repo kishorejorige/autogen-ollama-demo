@@ -116,6 +116,111 @@ type DetailTabType = 'summary' | 'iterations' | 'messages' | 'artifacts';
             </div>
           </div>
 
+          <div class="summary-section" *ngIf="detail()!.quality_gate_data as qg">
+            <h4>🛡️ Quality Gate Compliance & Run Readiness</h4>
+            <div class="qg-status-banner" [ngClass]="qg.overall_status?.toLowerCase()">
+              <span class="qg-title">Overall Quality Gate Status: <strong>{{ qg.overall_status }}</strong></span>
+              <span class="qg-title" *ngIf="qg.run_readiness">Run Readiness: <strong>{{ qg.run_readiness }}</strong></span>
+              <span class="qg-prod-tag" *ngIf="qg.production_ready_eligible">★ Production Ready Eligible</span>
+            </div>
+
+            <!-- Deterministic Project Validation Warning Boxes -->
+            <div class="qg-warning-box" *ngIf="qg.project_validation?.unresolved_imports?.length">
+              <h5>❌ Unresolved Local Imports</h5>
+              <ul>
+                <li *ngFor="let imp of qg.project_validation?.unresolved_imports">{{ imp }}</li>
+              </ul>
+            </div>
+
+            <div class="qg-warning-box" *ngIf="qg.project_validation?.undefined_symbols?.length">
+              <h5>❌ Undefined Symbols Detected</h5>
+              <ul>
+                <li *ngFor="let sym of qg.project_validation?.undefined_symbols">{{ sym }}</li>
+              </ul>
+            </div>
+
+            <div class="qg-warning-box" *ngIf="qg.project_validation?.module_conflicts?.length">
+              <h5>⚠️ Module Shadowing Conflicts</h5>
+              <ul>
+                <li *ngFor="let conf of qg.project_validation?.module_conflicts">{{ conf }}</li>
+              </ul>
+            </div>
+
+            <div class="qg-warning-box" *ngIf="qg.project_validation?.placeholder_files?.length">
+              <h5>📝 Placeholder Artifacts Detected</h5>
+              <ul>
+                <li *ngFor="let pf of qg.project_validation?.placeholder_files">{{ pf }}</li>
+              </ul>
+            </div>
+
+            <div class="qg-warning-box" *ngIf="qg.project_validation?.missing_dependency_files?.length">
+              <h5>📦 Missing Dependency Files</h5>
+              <ul>
+                <li *ngFor="let dep of qg.project_validation?.missing_dependency_files">{{ dep }}</li>
+              </ul>
+            </div>
+
+            <div class="qg-warning-box" *ngIf="qg.project_validation?.syntax_errors?.length">
+              <h5>💥 Syntax Errors</h5>
+              <ul>
+                <li *ngFor="let err of qg.project_validation?.syntax_errors">{{ err }}</li>
+              </ul>
+            </div>
+
+            <!-- Framework Mismatches & Unsupported Claims Warnings -->
+            <div class="qg-warning-box" *ngIf="qg.framework_mismatches?.length">
+              <h5>⚠️ Framework Mismatches Detected</h5>
+              <ul>
+                <li *ngFor="let mismatch of qg.framework_mismatches">{{ mismatch }}</li>
+              </ul>
+            </div>
+
+            <div class="qg-warning-box" *ngIf="qg.unsupported_claims?.length">
+              <h5>🚨 Unsupported Claims Flagged</h5>
+              <ul>
+                <li *ngFor="let claim of qg.unsupported_claims">{{ claim }}</li>
+              </ul>
+            </div>
+
+            <!-- Requirements Matrix Table -->
+            <div class="matrix-table-container" *ngIf="qg.requirements?.length">
+              <table class="matrix-table">
+                <thead>
+                  <tr>
+                    <th>Requirement</th>
+                    <th>Status</th>
+                    <th>Evidence</th>
+                    <th>Issues</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let req of qg.requirements">
+                    <td class="req-name">
+                      <strong>{{ req.name }}</strong>
+                      <span class="req-id">({{ req.id }})</span>
+                    </td>
+                    <td>
+                      <span class="req-status-badge" [ngClass]="req.status?.toLowerCase()">
+                        {{ req.status }}
+                      </span>
+                    </td>
+                    <td>
+                      <div class="evidence-list">
+                        <span class="evidence-tag" *ngFor="let ev of req.evidence">{{ ev }}</span>
+                      </div>
+                    </td>
+                    <td class="req-issues">
+                      <span *ngIf="!req.issues?.length" class="no-issue">None</span>
+                      <ul *ngIf="req.issues?.length">
+                        <li *ngFor="let issue of req.issues">{{ issue }}</li>
+                      </ul>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div class="summary-section" *ngIf="detail()!.final_summary">
             <h4>Execution Result Summary</h4>
             <div class="summary-box">
@@ -398,6 +503,31 @@ type DetailTabType = 'summary' | 'iterations' | 'messages' | 'artifacts';
     .id-code { font-family: monospace; font-size: 0.85rem; }
     .summary-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 1rem; color: #334155; font-size: 0.95rem; line-height: 1.5; }
 
+    /* Quality Gate Matrix Styles */
+    .qg-status-banner { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.25rem; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; margin-bottom: 1rem; }
+    .qg-status-banner.pass { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+    .qg-status-banner.fail, .qg-status-banner.needs_attention { background: #fff1f2; border-color: #fecdd3; color: #9f1239; }
+    .qg-prod-tag { background: #059669; color: #ffffff; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.65rem; border-radius: 6px; }
+
+    .qg-warning-box { background: #fffbe0; border: 1px solid #fde047; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; color: #713f12; }
+    .qg-warning-box h5 { margin: 0 0 0.35rem 0; font-size: 0.85rem; }
+    .qg-warning-box ul { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; }
+
+    .matrix-table-container { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+    .matrix-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left; }
+    .matrix-table th { background: #f8fafc; padding: 0.75rem 1rem; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #475569; }
+    .matrix-table td { padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    .req-name { display: flex; flex-direction: column; }
+    .req-id { font-size: 0.75rem; color: #94a3b8; font-family: monospace; }
+    .req-status-badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 700; font-size: 0.75rem; }
+    .req-status-badge.implemented { background: #dcfce7; color: #15803d; }
+    .req-status-badge.partial { background: #fef9c3; color: #a16207; }
+    .req-status-badge.missing, .req-status-badge.incorrect { background: #fee2e2; color: #b91c1c; }
+    .evidence-list { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .evidence-tag { background: #f1f5f9; color: #334155; font-size: 0.7rem; padding: 0.15rem 0.4rem; border-radius: 4px; font-weight: 600; }
+    .req-issues ul { margin: 0; padding-left: 1rem; color: #b91c1c; font-size: 0.8rem; }
+    .no-issue { color: #94a3b8; font-style: italic; }
+
     /* Iterations Tab */
     .iteration-timeline { display: flex; flex-direction: column; gap: 1rem; }
     .iteration-card { border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff; }
@@ -645,6 +775,7 @@ export class HistoryDetailComponent implements OnInit {
     switch (name) {
       case 'manager_agent': return '📋 Manager Agent';
       case 'python_developer': return '💻 Python Developer';
+      case 'requirements_validator': return '🎯 Requirements Validator';
       case 'code_reviewer': return '🔍 Code Reviewer';
       case 'tester_agent': return '🧪 Tester Agent';
       case 'documentation_agent': return '📝 Documentation Specialist';

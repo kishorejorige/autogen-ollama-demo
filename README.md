@@ -18,13 +18,16 @@ This project demonstrates how to build and orchestrate multiple AI agents locall
 - 🔍 Code Reviewer Agent (provides design & style feedback)
 - 🧪 Tester Agent (identifies defects & suggests test cases)
 - 📝 Documentation Agent (writes manuals and usage guides)
+- 🛡️ Evidence-Based Quality Gates (deterministic verification overriding optimistic agent claims)
+- 🚀 Deterministic Run-Readiness Validator (AST import, syntax, symbol, shadowing, placeholder & stack dependency checks)
 - 🔄 Bounded Loop Engineering workflow (max 3 retry-repair cycles)
 - 💾 Workflow Memory & SQLite Persistence (`app/database`)
-- 📄 Workflow Export (JSON payload backup and ZIP file archive download)
+- 📦 Structured ZIP Export (`quality-report.json`, `iterations/` history, and verified `final/` deliverables)
+- ⚡ Real-Time SSE Defect Events (streamed project validation feedback)
 - ⭐ Favorites System (toggle favorites & analytics tracking)
 - 📅 Date-Range Filtering (Today, Last 7 Days, Last 30 Days in UTC)
 - 📜 History & Memory UI Interface with search, status filtering, and statistics cards
-- 🔍 Workflow Detail Inspector (Overview, Iterations Timeline, Messages Feed, Generated Artifacts)
+- 🔍 Workflow Detail Inspector & Quality Matrix (Overview, Iterations Timeline, Messages Feed, Artifacts, Run Readiness)
 - ⚡ Run Again action (loads prompt into New Workflow tab without auto-executing)
 - 🦙 Ollama Integration (local AI models execution)
 - ⚙️ Environment-based Configuration
@@ -46,13 +49,15 @@ This project demonstrates how to build and orchestrate multiple AI agents locall
 | Tester Agent | ✅ Complete |
 | Documentation Agent | ✅ Complete |
 | Bounded Loop Engineering | ✅ Complete |
+| Evidence-Based Quality Gates | ✅ Complete |
+| Deterministic Project Run-Readiness | ✅ Complete |
 | Code Copy / Download UI | ✅ Complete |
 | Workflow Memory & Database Persistence | ✅ Complete |
 | Frontend History Interface | ✅ Complete |
-| Workflow Export (JSON & ZIP) | ✅ Complete |
+| Workflow Export (JSON & Structured ZIP) | ✅ Complete |
 | Favorite Toggles & Analytics | ✅ Complete |
 | Date-Range Filtering | ✅ Complete |
-| Automated Tests | ✅ Complete |
+| Automated Tests (Pytest & Karma) | ✅ Complete |
 | GitHub Actions CI | ✅ Complete |
 | Docker Support & Volume Persistence | ✅ Complete |
 

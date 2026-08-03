@@ -227,6 +227,7 @@ export class ResponseCards {
     switch (source) {
       case 'manager_agent': return 'manager';
       case 'python_developer': return 'developer';
+      case 'requirements_validator': return 'validator';
       case 'code_reviewer': return 'reviewer';
       case 'tester_agent': return 'tester';
       case 'documentation_agent': return 'documenter';
@@ -239,6 +240,7 @@ export class ResponseCards {
     switch (source) {
       case 'manager_agent': return '📋';
       case 'python_developer': return '💻';
+      case 'requirements_validator': return '🎯';
       case 'code_reviewer': return '🔍';
       case 'tester_agent': return '🧪';
       case 'documentation_agent': return '📝';

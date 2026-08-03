@@ -92,6 +92,7 @@ interface ProgressStep {
               <div class="iteration-details">
                 <span *ngIf="ws.reviewer_status">Review: <span [ngClass]="ws.reviewer_status">{{ ws.reviewer_status }}</span></span>
                 <span *ngIf="ws.tester_status"> | Test: <span [ngClass]="ws.tester_status">{{ ws.tester_status }}</span></span>
+                <span *ngIf="ws.quality_gate_result?.run_readiness"> | Readiness: <strong>{{ ws.quality_gate_result?.run_readiness }}</strong></span>
               </div>
             </div>
 
@@ -864,9 +865,10 @@ export class DashboardComponent {
   public readonly steps = signal<ProgressStep[]>([
     { id: 'manager', label: '1. Manager Agent', status: 'idle', icon: '📋', agentName: 'manager_agent' },
     { id: 'developer', label: '2. Python Developer', status: 'idle', icon: '💻', agentName: 'python_developer' },
-    { id: 'reviewer', label: '3. Code Reviewer', status: 'idle', icon: '🔍', agentName: 'code_reviewer' },
-    { id: 'tester', label: '4. Tester Agent', status: 'idle', icon: '🧪', agentName: 'tester_agent' },
-    { id: 'documenter', label: '5. Documentation Specialist', status: 'idle', icon: '📝', agentName: 'documentation_agent' }
+    { id: 'validator', label: '3. Requirements Validator', status: 'idle', icon: '🎯', agentName: 'requirements_validator' },
+    { id: 'reviewer', label: '4. Code Reviewer', status: 'idle', icon: '🔍', agentName: 'code_reviewer' },
+    { id: 'tester', label: '5. Tester Agent', status: 'idle', icon: '🧪', agentName: 'tester_agent' },
+    { id: 'documenter', label: '6. Documentation Specialist', status: 'idle', icon: '📝', agentName: 'documentation_agent' }
   ]);
 
   // Overall workflow status
@@ -999,7 +1001,7 @@ export class DashboardComponent {
   }
 
   updateProgressFromState(state: WorkflowState) {
-    const agentSequence = ['manager_agent', 'python_developer', 'code_reviewer', 'tester_agent', 'documentation_agent'];
+    const agentSequence = ['manager_agent', 'python_developer', 'requirements_validator', 'code_reviewer', 'tester_agent', 'documentation_agent'];
     const currentIndex = agentSequence.indexOf(state.current_agent || '');
 
     this.steps.update(steps => steps.map((step, idx) => {
@@ -1013,7 +1015,7 @@ export class DashboardComponent {
         if (step.agentName === 'tester_agent' && state.tester_status === 'FAIL') {
           return { ...step, status: 'failed' };
         }
-        if (idx < 4) return { ...step, status: 'completed' };
+        if (idx < 5) return { ...step, status: 'completed' };
         return { ...step, status: 'idle' };
       }
       if (state.status === 'FAILED') {

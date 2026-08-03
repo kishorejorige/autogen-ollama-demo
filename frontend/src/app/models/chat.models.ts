@@ -1,4 +1,5 @@
 export type WorkflowStatusType = 'RUNNING' | 'COMPLETE' | 'NEEDS_ATTENTION' | 'FAILED';
+export type RunReadinessType = 'RUNNABLE' | 'PARTIALLY_RUNNABLE' | 'NOT_RUNNABLE' | 'UNKNOWN';
 
 export interface GeneratedFile {
   filename: string;
@@ -16,14 +17,63 @@ export interface IterationHistory {
   tester_response: string;
 }
 
+export interface RequirementCompliance {
+  id: string;
+  name: string;
+  status: 'IMPLEMENTED' | 'PARTIAL' | 'MISSING' | 'INCORRECT' | 'UNKNOWN';
+  evidence: string[];
+  issues: string[];
+}
+
+export interface ProjectValidationResult {
+  overall_status: 'PASS' | 'FAIL';
+  run_readiness: RunReadinessType;
+  files_checked: string[];
+  unresolved_imports: string[];
+  undefined_symbols: string[];
+  missing_model_attributes: string[];
+  module_conflicts: string[];
+  placeholder_files: string[];
+  placeholder_reasons: string[];
+  syntax_errors: string[];
+  missing_dependency_files: string[];
+  missing_required_files: string[];
+  frontend_issues: string[];
+  backend_issues: string[];
+  database_issues: string[];
+  docker_issues: string[];
+  ci_issues: string[];
+  test_issues: string[];
+  documentation_issues: string[];
+  security_issues: string[];
+  recommended_fixes: string[];
+}
+
+export interface QualityGateResult {
+  overall_status: 'PASS' | 'FAIL' | 'NEEDS_ATTENTION' | 'UNKNOWN';
+  run_readiness?: RunReadinessType;
+  project_validation?: ProjectValidationResult;
+  requirements: RequirementCompliance[];
+  framework_mismatches: string[];
+  missing_deliverables: string[];
+  unsupported_claims: string[];
+  security_issues: string[];
+  recommended_fixes: string[];
+  production_ready_eligible: boolean;
+}
+
 export interface WorkflowState {
   workflow_id: string;
   current_agent: string | null;
   current_iteration: number;
   max_iterations: number;
   status: 'PENDING' | 'RUNNING' | 'COMPLETE' | 'NEEDS_ATTENTION' | 'FAILED' | 'CANCELLED';
+  quality_gate_status?: string;
   reviewer_status: 'APPROVED' | 'CHANGES_REQUIRED' | null;
   tester_status: 'PASS' | 'FAIL' | null;
+  quality_gate_result?: QualityGateResult | null;
+  framework_mismatches?: string[];
+  unsupported_claims?: string[];
   messages: MessageResponse[];
   generated_files: GeneratedFile[];
   iteration_history: IterationHistory[];
@@ -65,6 +115,7 @@ export interface WorkflowSummary {
   id: string;
   prompt: string;
   status: WorkflowStatusType;
+  quality_gate_status?: string;
   total_iterations: number;
   generated_file_count: number;
   favorite: boolean;
@@ -117,6 +168,8 @@ export interface WorkflowDetail {
   id: string;
   prompt: string;
   status: WorkflowStatusType;
+  quality_gate_status?: string;
+  quality_gate_data?: QualityGateResult | null;
   final_summary: string | null;
   total_iterations: number;
   generated_file_count: number;
