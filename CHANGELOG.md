@@ -4,7 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by **Keep a Changelog**, and this project follows **Semantic Versioning (SemVer)**.
 
-## [0.9.0] - Unreleased
+## [1.0.0] - 2026-08-03
+
+### Added
+
+- **Evidence-Based Quality Gates**: Hardened requirements validation that overrides optimistic agent `PASS` claims whenever deterministic project validation detects code defects.
+- **Deterministic Project Run-Readiness Validator (`app/project_validator.py`)**: Static AST and file system inspector checking Python syntax, missing local module imports (`models.py`, `database.py`), undefined symbol calls (`get_user`, `verify_password`), top-level module shadowing (`fastapi/` folder), placeholder files (`README.md`, `solution.py`, hardcoded `your-secret-key`), and stack dependencies (`requirements.txt`, `package.json`). Computes `RunReadiness` (`RUNNABLE`, `PARTIALLY_RUNNABLE`, `NOT_RUNNABLE`, `UNKNOWN`).
+- **Structured ZIP Archives (`app/export_service.py`)**: Export archives including `quality-report.json`, root `README.md`, `iterations/` turn history, and `final/` artifacts populated only when Quality Gate status is `PASS`.
+- **Real-Time Validation SSE Events**: Streamed events (`project_validation_started`, `project_validation_completed`, `unresolved_import_detected`, `undefined_symbol_detected`, `syntax_error_detected`, `placeholder_artifact_detected`, `module_shadowing_detected`, `missing_dependency_detected`, `run_readiness_computed`).
+- **Frontend Quality Matrix & Run Readiness**: Renders Run Readiness tags and defect breakdown warning boxes in Dashboard and History Detail views.
+- **Comprehensive Unit & Stress Test Suite**: 92 automated backend pytest tests and Angular Karma test coverage.
+
+---
+
+## [0.9.0] - 2026-08-01
 
 ### Added
 
